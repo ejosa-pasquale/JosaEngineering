@@ -22,7 +22,6 @@ FATT_RAGGR = {1: 1.00, 2: 0.80, 3: 0.70}
 
 
 def _fattore_temp(temp_amb: int) -> float:
-    # prende il valore tabellato più vicino verso il basso, default 50°C se >50
     keys = sorted(FATT_TEMP.keys())
     sel = max([t for t in keys if t <= temp_amb], default=50)
     return FATT_TEMP.get(sel, 0.71)
@@ -31,8 +30,7 @@ def _fattore_temp(temp_amb: int) -> float:
 def _fattore_raggr(n_linee: int) -> float:
     if n_linee in FATT_RAGGR:
         return FATT_RAGGR[n_linee]
-    # oltre 3 linee: imposto cautelativo
-    return 0.70
+    return 0.70  # cautelativo oltre 3 linee
 
 
 def genera_progetto_ev(
@@ -80,10 +78,16 @@ def genera_progetto_ev(
     if tipo_posa not in PORTATA_BASE:
         raise ValueError(f"Tipo posa non gestito: {tipo_posa}")
     if rcd_idn_ma not in (30, 100, 300):
-        raise ValueError("IΔn ammessa tipica: 30/100/300 mA (imposta un valore standard).")
+        raise ValueError("IΔn tipica: 30/100/300 mA (imposta un valore standard).")
 
     trifase = "trifase" in alimentazione.lower()
     tensione = 400 if trifase else 230
+
+    # ---------------------------
+    # LIMITE MONOFASE 7,4 kW
+    # ---------------------------
+    if (not trifase) and (potenza_kw > 7.4):
+        raise ValueError("In monofase la potenza massima ammessa è 7,4 kW. Seleziona trifase o riduci la potenza.")
 
     # ---------------------------
     # Ib
@@ -115,7 +119,6 @@ def genera_progetto_ev(
 
     # ---------------------------
     # Iz con fattori correttivi (temp + raggruppamento)
-    # CEI 64-8 Parte 5-52 (portate e derating)
     # ---------------------------
     k_temp = _fattore_temp(temp_amb)
     k_ragg = _fattore_raggr(n_linee)
@@ -142,13 +145,11 @@ def genera_progetto_ev(
             break
 
     if sezione is None:
-        raise ValueError("Nessuna sezione soddisfa contemporaneamente ΔV≤4% e Ib ≤ In ≤ Iz (con derating).")
+        raise ValueError("Nessuna sezione soddisfa ΔV≤4% e Ib ≤ In ≤ Iz (con derating).")
 
     # ---------------------------
     # Check Icn vs Icc (semplificato)
     # ---------------------------
-    # Nota: qui non scegliamo un interruttore specifico (marca/modello),
-    # ma diamo un'indicazione: se Icc > 6kA, richiedere Icn superiore.
     if icc_ka <= 6:
         icn_note = "Icn minimo 6 kA (verifica puntuale con dati di fornitura)."
     elif icc_ka <= 10:
@@ -157,48 +158,54 @@ def genera_progetto_ev(
         icn_note = "Richiedere interruttore con Icn adeguato (≥ Icc presunta)."
 
     # ---------------------------
-    # CHECK-LIST 722 (Warning / Non conformità)
+    # CHECK-LIST 722 (pulita e coerente al caso)
     # ---------------------------
     warning_722 = []
     nonconf_722 = []
     ok_722 = []
 
-    # Circuito dedicato per punto di ricarica: qui è assunto vero (stai dimensionando la linea dedicata)
+    modo_norm = modo_ricarica.strip().lower()
+    evse_dc = (modo_norm == "modo 4")
+
+    # circuito dedicato: assunto vero (stai dimensionando una linea dedicata)
     ok_722.append("Circuito dedicato per punto di ricarica (linea dedicata dimensionata).")
 
-    # fattore di utilizzazione/contemporaneità (nota progettuale)
-    if not gestione_carichi and n_linee > 1:
-        warning_722.append("Più punti/linee senza gestione carichi: assumere contemporaneità = 1 (verificare potenza disponibile).")
+    # contemporaneità/gestione carichi: solo se più linee/punti
+    if n_linee > 1:
+        if gestione_carichi:
+            ok_722.append("Gestione carichi/contemporaneità: prevista.")
+        else:
+            warning_722.append("Più linee/punti senza gestione carichi: assumere contemporaneità = 1 e verificare potenza disponibile.")
     else:
-        ok_722.append("Gestione carichi/contemporaneità: impostata o non necessaria.")
+        ok_722.append("Singola linea/punto: contemporaneità non critica.")
 
-    # differenziale: almeno Tipo A, IΔn ≤ 30 mA per punto (prassi 722)
+    # differenziale per punto: IΔn <= 30 mA (qui la rendiamo stringente)
     if rcd_idn_ma > 30:
-        nonconf_722.append("Protezione differenziale: per punto EV è richiesto IΔn ≤ 30 mA (impostato valore superiore).")
+        nonconf_722.append("Protezione differenziale per punto: richiesto IΔn ≤ 30 mA (impostato valore superiore).")
     else:
         ok_722.append("Differenziale per punto: IΔn ≤ 30 mA.")
 
-    # DC fault protection (Modo 3 tipicamente): Tipo B o A + 6 mA DC (se non integrato nell’EVSE)
-    if modo_ricarica.strip().lower() == "modo 3":
+    # DC fault protection: SOLO per Modo 3 (AC)
+    if modo_norm == "modo 3":
         if ("tipo b" not in rcd_tipo.lower()) and ("6ma" not in rcd_tipo.lower()):
             nonconf_722.append("Modo 3: richiesto RCD Tipo B oppure Tipo A + rilevazione 6 mA DC (se non integrata nell’EVSE).")
         else:
             ok_722.append("Protezione guasti DC coerente (Tipo B o A+6mA DC).")
 
-    # Modo 1/2 con presa domestica: limitazioni d’uso (occasionali) e corrente tipica 16A
-    if modo_ricarica.strip().lower() in ("modo 1", "modo 2") and tipo_punto == "Presa domestica":
+    # Modo 1/2 con presa domestica: limiti/prassi
+    if modo_norm in ("modo 1", "modo 2") and tipo_punto == "Presa domestica":
         if In > 16:
             nonconf_722.append("Modo 1/2 con presa domestica: corrente > 16 A non ammessa per presa domestica (adeguare).")
         else:
-            warning_722.append("Modo 1/2 con presa domestica: usare solo per ricariche occasionali e con componenti idonei.")
+            warning_722.append("Modo 1/2 con presa domestica: raccomandato solo per ricariche occasionali e con componenti idonei.")
 
-    # SPD raccomandato (nota pratica)
+    # SPD: nota solo se pertinente (qui: warning se assente)
     if not spd_previsto:
-        warning_722.append("SPD non previsto: per EV è fortemente raccomandato valutare protezione da sovratensioni.")
+        warning_722.append("SPD non previsto: valutare protezione da sovratensioni in base a rischio e impianto.")
     else:
-        ok_722.append("SPD previsto/valutato (raccomandato per protezione EVSE/veicolo).")
+        ok_722.append("SPD previsto/valutato.")
 
-    # installazione esterna: IP/IK
+    # esterno: IP/IK solo se esterno
     if esterno:
         if ip_rating < 44:
             nonconf_722.append("Installazione esterna: richiesto grado di protezione almeno IP44.")
@@ -217,23 +224,41 @@ def genera_progetto_ev(
         ok_722.append("Altezza punto di connessione in intervallo raccomandato (0,5–1,5 m).")
 
     # ---------------------------
-    # TESTI DOCUMENTALI (Relazione, Unifilare, Planimetria)
+    # TESTI DOCUMENTALI PULITI (solo note pertinenti)
     # ---------------------------
 
+    # Nota DC fault: SOLO per Modo 3 (AC)
+    nota_dc_fault = ""
+    if modo_norm == "modo 3":
+        nota_dc_fault = (
+            "Nota (CEI 64-8/7-722): per il Modo 3 è richiesta protezione contro guasti in DC "
+            "(RCD Tipo B oppure Tipo A + rilevazione 6 mA DC se non integrata nell’EVSE)."
+        )
+
+    # Nota prese domestiche: SOLO se Modo 1/2 + presa domestica
+    nota_presa_dom = ""
+    if modo_norm in ("modo 1", "modo 2") and tipo_punto == "Presa domestica":
+        nota_presa_dom = "Nota: Modo 1/2 con presa domestica raccomandato solo per ricariche occasionali con componenti idonei."
+
+    # Nota SPD: pulita
+    nota_spd = "SPD previsto/valutato." if spd_previsto else "SPD non previsto: valutare protezione da sovratensioni in base a rischio e impianto."
+
+    # Riferimenti normativi: essenziali + SPD solo se previsto/valutato
     riferimenti_normativi = dedent("""
     RIFERIMENTI NORMATIVI E LEGISLATIVI
     - Legge 186/68: regola dell’arte.
     - D.M. 37/08: realizzazione impianti all’interno degli edifici (ove applicabile).
-    - CEI 64-8: Impianti elettrici utilizzatori in bassa tensione:
-      • Parte 4-41: Protezione contro i contatti elettrici (contatti diretti/indiretti).
-      • Parte 4-43: Protezione contro le sovracorrenti (sovraccarico/cortocircuito).
-      • Parte 5-52: Scelta e messa in opera delle condutture.
-      • Parte 5-53: Apparecchi di manovra e protezione.
-      • Parte 5-54: Impianti di terra, conduttori di protezione ed equipotenzialità.
-      • Parte 7-722: Alimentazione dei veicoli elettrici (prescrizioni specifiche EV).
+    - CEI 64-8: impianti elettrici utilizzatori in BT:
+      • Parte 4-41: protezione contro i contatti elettrici.
+      • Parte 4-43: protezione contro le sovracorrenti.
+      • Parte 5-52: condutture (scelta e posa).
+      • Parte 5-53: apparecchi di manovra e protezione.
+      • Parte 5-54: impianti di terra ed equipotenzialità.
+      • Parte 7-722: alimentazione dei veicoli elettrici.
     - IEC/CEI EN 61851-1: sistemi di ricarica conduttiva dei veicoli elettrici.
-    - CEI EN 62305 / CEI 81-10: protezione contro i fulmini (valutazione SPD “quando applicabile”).
     """).strip()
+    if spd_previsto:
+        riferimenti_normativi += "\n- CEI EN 62305 / CEI 81-10: valutazione protezione contro sovratensioni (quando applicabile)."
 
     relazione = dedent(f"""
     RELAZIONE TECNICA – INFRASTRUTTURA DI RICARICA VEICOLI ELETTRICI
@@ -246,43 +271,40 @@ def genera_progetto_ev(
     Alimentazione EVSE: {alimentazione}
     Modo di ricarica: {modo_ricarica}
     Punto di connessione: {tipo_punto}
-    Installazione esterna: {"Sì" if esterno else "No"} (IP{ip_rating} / IK{ik_rating})
+    Installazione esterna: {"Sì" if esterno else "No"}{f" (IP{ip_rating}/IK{ik_rating})" if esterno else ""}
     Altezza punto di connessione: {altezza_presa_m:.2f} m
 
     {riferimenti_normativi}
 
     DESCRIZIONE DELL’INTERVENTO
-    L’intervento prevede l’installazione di una stazione di ricarica per veicoli elettrici (EVSE)
-    di potenza nominale {potenza_kw:.1f} kW, alimentata mediante linea dedicata dal quadro elettrico.
+    Installazione di EVSE di potenza nominale {potenza_kw:.1f} kW alimentata tramite linea dedicata dal quadro elettrico.
 
     CRITERI DI PROGETTO (CEI 64-8)
     - Caduta di tensione di progetto: ΔV ≤ 4% (CEI 64-8 §525).
     - Verifica sovraccarico: Ib ≤ In ≤ Iz (CEI 64-8 §433).
-    - Portate cavo: tabella semplificata riferita a condizioni standard; applicati fattori correttivi:
-      • Temperatura ambiente {temp_amb} °C → kT={k_temp:.2f}
-      • Raggruppamento linee n={n_linee} → kG={k_ragg:.2f}
-    - Cavo previsto: FG16(O)R16 0,6/1 kV (rame).
+    - Portate cavo: condizioni standard con fattori correttivi:
+      • Temperatura {temp_amb} °C → kT={k_temp:.2f}
+      • Raggruppamento n={n_linee} → kG={k_ragg:.2f}
+    - Cavo: FG16(O)R16 0,6/1 kV (rame).
 
     DIMENSIONAMENTO LINEA
-    - Tensione nominale: {tensione} V
-    - cosφ di progetto: {cosphi:.2f}
-    - Lunghezza linea: {distanza_m:.1f} m
-    - Corrente di impiego: Ib = {Ib:.2f} A
-    - Protezione magnetotermica: In = {In} A (curva C)
-    - Sezione conduttori di fase: {sezione} mm²
-    - Portata base (condizioni standard): Iz_base = {Iz_base_sel} A
-    - Portata corretta (derating): Iz = {Iz_corr:.1f} A
-    - Verifica CEI 64-8 §433: Ib ≤ In ≤ Iz → {("OK" if (Ib <= In <= Iz_corr) else "NON OK")}
+    - Tensione: {tensione} V
+    - cosφ: {cosphi:.2f}
+    - Lunghezza: {distanza_m:.1f} m
+    - Ib = {Ib:.2f} A
+    - In = {In} A (curva C)
+    - Sezione fase: {sezione} mm²
+    - Iz_base = {Iz_base_sel} A | Iz_corr = {Iz_corr:.1f} A
+    - Verifica Ib ≤ In ≤ Iz: {"OK" if (Ib <= In <= Iz_corr) else "NON OK"}
 
     PROTEZIONI
-    - Sovracorrenti: interruttore magnetotermico dedicato alla linea EV.
-    - Cortocircuito: Icc presunta al punto di installazione = {icc_ka:.1f} kA → {icn_note}
+    - Sovracorrenti: interruttore MT dedicato alla linea EV.
+    - Cortocircuito: Icc presunta = {icc_ka:.1f} kA → {icn_note}
     - Differenziale: {rcd_tipo}, IΔn = {rcd_idn_ma} mA.
-      Per ricarica EV è richiesta protezione differenziale per punto con IΔn ≤ 30 mA e,
-      per il Modo 3, protezione contro guasti DC (Tipo B o Tipo A con 6 mA DC se non integrato nell’EVSE).
-    - SPD: {"Previsto/valutato" if spd_previsto else "Non previsto"} (raccomandato valutare in base a rischio e impianto).
+    {nota_dc_fault if nota_dc_fault else ""}
+    {nota_spd}
 
-    PRESCRIZIONI SPECIFICHE CEI 64-8/7 – SEZIONE 722 (CHECK-LIST)
+    PRESCRIZIONI CEI 64-8/7 – SEZIONE 722 (CHECK-LIST)
     Esiti OK:
     {("- " + "\\n- ".join(ok_722)) if ok_722 else "- (nessuno)"}
 
@@ -292,31 +314,29 @@ def genera_progetto_ev(
     Non conformità:
     {("- " + "\\n- ".join(nonconf_722)) if nonconf_722 else "- (nessuna)"}
 
+    {nota_presa_dom if nota_presa_dom else ""}
+
     NOTE FINALI
-    Le verifiche svolte costituiscono un pre-dimensionamento coerente con CEI 64-8.
-    La scelta finale dei dispositivi (MT/Idn/Icn, SPD, IP/IK) deve essere confermata con:
-    - dati di corto circuito del punto di installazione,
-    - documentazione tecnica dell’EVSE (presenza RDC-DD 6 mA DC integrata),
-    - condizioni reali di posa (temperatura, raggruppamenti, percorsi, ambienti).
+    Le verifiche costituiscono pre-dimensionamento coerente con CEI 64-8. La scelta finale dispositivi va confermata con dati reali e schede EVSE.
     """).strip()
 
     unifilare = dedent(f"""
-    DATI PER SCHEMA UNIFILARE – LINEA EV (CEI 64-8 / 722)
-    =====================================================
+    DATI PER SCHEMA UNIFILARE – LINEA EV
+    ===================================
 
-    QUADRO DI ORIGINE → LINEA DEDICATA EVSE → EVSE
+    QUADRO → LINEA DEDICATA EVSE → EVSE
 
-    1) Protezione di linea (dedicata):
-       - Interruttore magnetotermico: In = {In} A, curva C, poli: {"4P" if trifase else "2P"}
-       - Potere di interruzione (Icn): {icn_note}
-       - Coordinamento sovraccarico: Ib={Ib:.2f} A ≤ In={In} A ≤ Iz={Iz_corr:.1f} A (OK)
+    1) Protezione di linea:
+       - Magnetotermico: In = {In} A, curva C, poli: {"4P" if trifase else "2P"}
+       - Potere interruzione: {icn_note}
+       - Verifica: Ib={Ib:.2f} A ≤ In={In} A ≤ Iz={Iz_corr:.1f} A (OK)
 
-    2) Protezione differenziale (per punto di ricarica – CEI 64-8/7-722):
+    2) Differenziale per punto:
        - Tipo: {rcd_tipo}
-       - Sensibilità: IΔn = {rcd_idn_ma} mA
-       - Nota DC: per Modo 3 richiesto Tipo B oppure Tipo A + rilevazione 6 mA DC (se non integrata nell’EVSE)
+       - IΔn: {rcd_idn_ma} mA
+    {("   - " + nota_dc_fault) if nota_dc_fault else ""}
 
-    3) Linea di alimentazione:
+    3) Linea:
        - Cavo: FG16(O)R16 0,6/1 kV (rame)
        - Sezione fase: {sezione} mm²
        - Posa: {tipo_posa}
@@ -324,7 +344,7 @@ def genera_progetto_ev(
        - Caduta di tensione: ΔV ≤ 4% (criterio di progetto)
 
     4) SPD:
-       - {"Previsto/valutato" if spd_previsto else "Non previsto"} (valutare secondo rischio e impianto)
+       - {"Previsto/valutato" if spd_previsto else "Non previsto"}
 
     5) Carico:
        - EVSE {potenza_kw:.1f} kW, {alimentazione}, {modo_ricarica}
@@ -335,24 +355,20 @@ def genera_progetto_ev(
     ===================================
 
     Ubicazione: {indirizzo}
-    Linea dedicata dal quadro elettrico al punto EVSE.
-    Lunghezza stimata: {distanza_m:.1f} m
-    Modalità di posa: {tipo_posa}
+    Linea dedicata dal quadro al punto EVSE.
+    Lunghezza: {distanza_m:.1f} m
+    Posa: {tipo_posa}
 
-    Prescrizioni:
-    - Se posa interrata:
-      • cavidotto corrugato doppia parete Ø 80 mm (o adeguato), profondità minima ~0,8 m;
-      • segnalazione con nastro; pozzetti/ispezioni ai cambi di direzione.
-    - Se posa a vista:
-      • canalina metallica/tubazione protettiva idonea all’ambiente; fissaggi adeguati.
+    - Interrata: cavidotto idoneo, profondità ~0,8 m, nastro segnalazione, pozzetti ai cambi direzione.
+    - A vista: canalina/tubazione idonea, fissaggi adeguati.
 
     Installazione esterna: {"Sì" if esterno else "No"}
-    - Requisiti consigliati: IP ≥ 44; protezione meccanica (IK) adeguata; protezione urti/urti accidentali.
+    {(f"- Requisiti: IP≥44 (IP{ip_rating}) e protezione meccanica adeguata (IK{ik_rating})." if esterno else "")}
     Altezza punto di connessione: {altezza_presa_m:.2f} m (raccomandato 0,5–1,5 m).
     """).strip()
 
     return {
-        # risultati numerici
+        # numeri
         "tensione_v": tensione,
         "Ib_a": round(Ib, 2),
         "In_a": In,
@@ -369,4 +385,7 @@ def genera_progetto_ev(
         "ok_722": ok_722,
         "warning_722": warning_722,
         "nonconf_722": nonconf_722,
+        # utili
+        "trifase": trifase,
+        "modo_dc": evse_dc,
     }
