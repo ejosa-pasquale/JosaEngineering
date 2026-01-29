@@ -8,17 +8,18 @@ from textwrap import dedent
 SEZIONI = [6, 10, 16, 25, 35, 50, 70, 95]
 INTERRUTTORI = [16, 20, 25, 32, 40, 50, 63, 80, 100, 125, 160]
 
-# Portate di base Iz per FG16(O)R16 in condizioni standard (semplificate)
+# Portate base Iz per FG16(O)R16 in condizioni standard (semplificate)
 PORTATA_BASE = {
     "Interrata": {6: 34, 10: 46, 16: 61, 25: 80, 35: 99, 50: 119, 70: 151, 95: 182},
     "A vista":   {6: 41, 10: 57, 16: 76, 25: 101, 35: 125, 50: 150, 70: 192, 95: 232},
 }
 
-# Fattori correttivi temperatura (semplificati)
+# Fattori correttivi (semplificati)
 FATT_TEMP = {30: 1.00, 35: 0.94, 40: 0.87, 45: 0.79, 50: 0.71}
-
-# Fattori correttivi raggruppamento (semplificati)
 FATT_RAGGR = {1: 1.00, 2: 0.80, 3: 0.70}
+
+# Coefficiente k per verifica termica I²t (rame, XLPE/EPR ~ 90°C) - valore tipico
+K_CU_XLPE = 143  # A·sqrt(s)/mm² (valore tipico usato in pratica)
 
 
 def _fattore_temp(temp_amb: int) -> float:
@@ -30,7 +31,21 @@ def _fattore_temp(temp_amb: int) -> float:
 def _fattore_raggr(n_linee: int) -> float:
     if n_linee in FATT_RAGGR:
         return FATT_RAGGR[n_linee]
-    return 0.70  # cautelativo oltre 3 linee
+    return 0.70
+
+
+def _pe_da_fase(sez_fase_mm2: int) -> int:
+    """
+    CEI 64-8 (Parte 5-54), criterio semplificato tipo 543.1.2 (rame):
+    - Sfase ≤ 16 -> SPE = Sfase
+    - 16 < Sfase ≤ 35 -> SPE = 16
+    - Sfase > 35 -> SPE = Sfase/2
+    """
+    if sez_fase_mm2 <= 16:
+        return sez_fase_mm2
+    if sez_fase_mm2 <= 35:
+        return 16
+    return int(math.ceil(sez_fase_mm2 / 2))
 
 
 def genera_progetto_ev(
@@ -41,17 +56,17 @@ def genera_progetto_ev(
     # dati elettrici
     potenza_kw: float,
     distanza_m: float,
-    alimentazione: str,   # "Monofase 230 V" / "Trifase 400 V"
-    tipo_posa: str,       # "Interrata" / "A vista"
+    alimentazione: str,
+    tipo_posa: str,
     # parametri progetto
-    sistema: str = "TT",
+    sistema: str = "TT",            # TT / TN-S / TN-C-S
     cosphi: float = 0.95,
     temp_amb: int = 30,
     n_linee: int = 1,
     icc_ka: float = 6.0,
     # EV / 722
     modo_ricarica: str = "Modo 3",
-    tipo_punto: str = "Connettore EV",        # "Connettore EV" / "Presa domestica" / "Presa industriale"
+    tipo_punto: str = "Connettore EV",
     esterno: bool = False,
     ip_rating: int = 44,
     ik_rating: int = 7,
@@ -60,14 +75,25 @@ def genera_progetto_ev(
     gestione_carichi: bool = False,
     # differenziale
     rcd_tipo: str = "Tipo A + RDC-DD 6mA DC",
-    rcd_idn_ma: int = 30
+    rcd_idn_ma: int = 30,
+    evse_rdcdd_integrato: bool = True,   # RDC-DD 6mA DC integrato nell'EVSE?
+    # verifiche 4-41 / campo
+    ra_ohm: float | None = None,         # resistenza di terra (TT) se disponibile
+    ul_v: float = 50.0,                  # tensione limite ordinaria
+    zs_ohm: float | None = None,         # impedenza anello guasto (TN) se disponibile
+    # verifica termica I²t (facoltativa)
+    t_intervento_s: float | None = None  # tempo intervento protezione (s) se disponibile
 ):
     """
-    Pre-dimensionamento linea EV con criteri CEI 64-8:
-    - Ib, scelta In, verifica Ib ≤ In ≤ Iz (con derating)
-    - sezione per caduta di tensione (limite 4%)
-    - check-list prescrizioni Sez. 722 (warning/non conformità)
-    - testi: Relazione, Unifilare (testo), Planimetria (testo)
+    Pre-dimensionamento + relazione tecnica con:
+    - Ib, In, sezione per ΔV ≤ 4%, verifica Ib ≤ In ≤ Iz
+    - PE (5-54) in modo semplificato
+    - verifica contatti indiretti:
+      * TT: Ra·IΔn ≤ UL (se Ra fornita)
+      * TN: nota/verifica con Zs/tempi (se dati non forniti)
+    - verifica termica corto (I²t) se Icc e t sono forniti
+    - checklist 722 coerente
+    - note obbligatorie per prove in campo dove necessario
     """
 
     # ---------------------------
@@ -78,14 +104,12 @@ def genera_progetto_ev(
     if tipo_posa not in PORTATA_BASE:
         raise ValueError(f"Tipo posa non gestito: {tipo_posa}")
     if rcd_idn_ma not in (30, 100, 300):
-        raise ValueError("IΔn tipica: 30/100/300 mA (imposta un valore standard).")
+        raise ValueError("IΔn tipica: 30/100/300 mA.")
 
     trifase = "trifase" in alimentazione.lower()
     tensione = 400 if trifase else 230
 
-    # ---------------------------
-    # LIMITE MONOFASE 7,4 kW
-    # ---------------------------
+    # Monofase max 7.4 kW
     if (not trifase) and (potenza_kw > 7.4):
         raise ValueError("In monofase la potenza massima ammessa è 7,4 kW. Seleziona trifase o riduci la potenza.")
 
@@ -105,11 +129,9 @@ def genera_progetto_ev(
         raise ValueError("Ib troppo elevata: nessuna taglia interruttore disponibile in tabella.")
 
     # ---------------------------
-    # Sezione per caduta di tensione (ΔV ≤ 4%)
-    # CEI 64-8 §525 (criterio di progetto)
-    # modello semplificato resistivo rame
+    # Sezione per caduta di tensione (ΔV ≤ 4%) – modello semplificato
     # ---------------------------
-    cond_rame = 56  # m/(Ω·mm²)
+    cond_rame = 56
     dv_max = tensione * 0.04
 
     if trifase:
@@ -118,7 +140,7 @@ def genera_progetto_ev(
         S_cad = (2 * distanza_m * Ib * cosphi) / (cond_rame * dv_max)
 
     # ---------------------------
-    # Iz con fattori correttivi (temp + raggruppamento)
+    # Iz con derating
     # ---------------------------
     k_temp = _fattore_temp(temp_amb)
     k_ragg = _fattore_raggr(n_linee)
@@ -130,14 +152,10 @@ def genera_progetto_ev(
     for S in SEZIONI:
         if S < S_cad:
             continue
-
         Iz_base = PORTATA_BASE[tipo_posa].get(S)
         if not Iz_base:
             continue
-
         Iz = Iz_base * k_temp * k_ragg
-
-        # CEI 64-8 §433: Ib ≤ In ≤ Iz
         if Ib <= In <= Iz:
             sezione = S
             Iz_corr = Iz
@@ -148,7 +166,12 @@ def genera_progetto_ev(
         raise ValueError("Nessuna sezione soddisfa ΔV≤4% e Ib ≤ In ≤ Iz (con derating).")
 
     # ---------------------------
-    # Check Icn vs Icc (semplificato)
+    # PE (5-54) – regola semplificata
+    # ---------------------------
+    sezione_pe = _pe_da_fase(int(sezione))
+
+    # ---------------------------
+    # Icn vs Icc (semplificato)
     # ---------------------------
     if icc_ka <= 6:
         icn_note = "Icn minimo 6 kA (verifica puntuale con dati di fornitura)."
@@ -158,19 +181,55 @@ def genera_progetto_ev(
         icn_note = "Richiedere interruttore con Icn adeguato (≥ Icc presunta)."
 
     # ---------------------------
-    # CHECK-LIST 722 (pulita e coerente al caso)
+    # Verifica termica corto (I²t) – se t disponibile
+    # Icc (kA) -> A
+    # Smin = I * sqrt(t) / k
     # ---------------------------
-    warning_722 = []
-    nonconf_722 = []
-    ok_722 = []
+    note_verifiche_campo = []
+    smin_i2t = None
+    if t_intervento_s is not None:
+        if t_intervento_s <= 0:
+            raise ValueError("Tempo intervento deve essere > 0")
+        Icc_A = icc_ka * 1000
+        smin_i2t = (Icc_A * math.sqrt(t_intervento_s)) / K_CU_XLPE
+        # Nota: è una verifica cautelativa se Icc riferita al punto; per correttezza serve Icc alla fine linea.
+    else:
+        note_verifiche_campo.append("Verifica termica corto circuito (I²t) da eseguire con Icc locale e tempi reali dell’interruttore (CEI 64-8/4-43).")
 
+    # ---------------------------
+    # CHECK 4-41 (contatti indiretti)
+    # ---------------------------
+    esito_441 = {"ok": [], "warning": [], "nonconf": []}
+
+    # TT: Ra * IΔn ≤ UL
+    if sistema.strip().upper().startswith("TT"):
+        if ra_ohm is not None:
+            Idn_A = rcd_idn_ma / 1000.0
+            val = ra_ohm * Idn_A
+            if val <= ul_v:
+                esito_441["ok"].append(f"TT: verifica Ra·IΔn ≤ {ul_v:.0f}V → {val:.1f}V (OK).")
+            else:
+                esito_441["nonconf"].append(f"TT: verifica Ra·IΔn ≤ {ul_v:.0f}V → {val:.1f}V (NON CONFORME).")
+        else:
+            esito_441["warning"].append("TT: inserire Ra (Ω) per verifica Ra·IΔn ≤ UL; in alternativa verificare in campo (CEI 64-8/4-41).")
+            note_verifiche_campo.append("Misurare Ra e verificare intervento differenziale/tempi (CEI 64-8/6 prove).")
+
+    # TN: serve Zs e curva/tempi – qui se Zs manca mettiamo nota
+    else:
+        if zs_ohm is not None:
+            esito_441["warning"].append("TN: Zs fornita, ma per verifica completa servono Ia/curve e tempi di intervento (CEI 64-8/4-41). Verificare con dati del dispositivo.")
+        else:
+            esito_441["warning"].append("TN: verificare in campo impedenza anello di guasto (Zs) e tempi di intervento (CEI 64-8/4-41).")
+            note_verifiche_campo.append("Misurare Zs e verificare tempi di intervento per la protezione contro i contatti indiretti (CEI 64-8/6).")
+
+    # ---------------------------
+    # CHECKLIST 722 (pulita)
+    # ---------------------------
+    warning_722, nonconf_722, ok_722 = [], [], []
     modo_norm = modo_ricarica.strip().lower()
-    evse_dc = (modo_norm == "modo 4")
 
-    # circuito dedicato: assunto vero (stai dimensionando una linea dedicata)
     ok_722.append("Circuito dedicato per punto di ricarica (linea dedicata dimensionata).")
 
-    # contemporaneità/gestione carichi: solo se più linee/punti
     if n_linee > 1:
         if gestione_carichi:
             ok_722.append("Gestione carichi/contemporaneità: prevista.")
@@ -179,76 +238,75 @@ def genera_progetto_ev(
     else:
         ok_722.append("Singola linea/punto: contemporaneità non critica.")
 
-    # differenziale per punto: IΔn <= 30 mA (qui la rendiamo stringente)
+    # Idn punto: 30 mA
     if rcd_idn_ma > 30:
-        nonconf_722.append("Protezione differenziale per punto: richiesto IΔn ≤ 30 mA (impostato valore superiore).")
+        nonconf_722.append("Differenziale per punto: richiesto IΔn ≤ 30 mA (impostato valore superiore).")
     else:
         ok_722.append("Differenziale per punto: IΔn ≤ 30 mA.")
 
-    # DC fault protection: SOLO per Modo 3 (AC)
+    # DC fault: Modo 3 (AC) – dipende da RDC-DD integrato
     if modo_norm == "modo 3":
-        if ("tipo b" not in rcd_tipo.lower()) and ("6ma" not in rcd_tipo.lower()):
-            nonconf_722.append("Modo 3: richiesto RCD Tipo B oppure Tipo A + rilevazione 6 mA DC (se non integrata nell’EVSE).")
+        if evse_rdcdd_integrato:
+            # basta Tipo A 30 mA (se EVSE garantisce 6mA DC interno)
+            if "tipo a" in rcd_tipo.lower() or "tipo b" in rcd_tipo.lower():
+                ok_722.append("Modo 3: RDC-DD 6 mA DC integrato nell’EVSE (RCD a monte coerente).")
+            else:
+                warning_722.append("Modo 3: RDC-DD integrato, ma verificare tipo RCD a monte (almeno Tipo A 30 mA).")
         else:
-            ok_722.append("Protezione guasti DC coerente (Tipo B o A+6mA DC).")
+            # serve Tipo B oppure A + 6mA (dispositivo esterno)
+            if ("tipo b" not in rcd_tipo.lower()) and ("6ma" not in rcd_tipo.lower()):
+                nonconf_722.append("Modo 3: senza RDC-DD integrato, richiesto RCD Tipo B oppure Tipo A + dispositivo 6 mA DC.")
+            else:
+                ok_722.append("Modo 3: protezione guasti DC coerente (Tipo B o A+6mA).")
 
-    # Modo 1/2 con presa domestica: limiti/prassi
+    # Modo 1/2 presa domestica
     if modo_norm in ("modo 1", "modo 2") and tipo_punto == "Presa domestica":
         if In > 16:
-            nonconf_722.append("Modo 1/2 con presa domestica: corrente > 16 A non ammessa per presa domestica (adeguare).")
+            nonconf_722.append("Modo 1/2 con presa domestica: corrente > 16 A non ammessa (adeguare).")
         else:
-            warning_722.append("Modo 1/2 con presa domestica: raccomandato solo per ricariche occasionali e con componenti idonei.")
+            warning_722.append("Modo 1/2 con presa domestica: raccomandato solo per ricariche occasionali.")
 
-    # SPD: nota solo se pertinente (qui: warning se assente)
     if not spd_previsto:
         warning_722.append("SPD non previsto: valutare protezione da sovratensioni in base a rischio e impianto.")
     else:
         ok_722.append("SPD previsto/valutato.")
 
-    # esterno: IP/IK solo se esterno
     if esterno:
         if ip_rating < 44:
-            nonconf_722.append("Installazione esterna: richiesto grado di protezione almeno IP44.")
+            nonconf_722.append("Installazione esterna: richiesto IP ≥ 44.")
         else:
             ok_722.append(f"Installazione esterna: IP{ip_rating} conforme (≥ IP44).")
-
         if ik_rating < 7:
             warning_722.append("Installazione esterna/pubblica: valutare protezione meccanica (raccomandato IK07 o misure equivalenti).")
         else:
             ok_722.append(f"Protezione meccanica: IK{ik_rating} adeguato (≥ IK07).")
 
-    # altezza raccomandata
     if not (0.5 <= altezza_presa_m <= 1.5):
         warning_722.append("Altezza punto di connessione fuori intervallo raccomandato 0,5–1,5 m.")
     else:
         ok_722.append("Altezza punto di connessione in intervallo raccomandato (0,5–1,5 m).")
 
     # ---------------------------
-    # TESTI DOCUMENTALI PULITI (solo note pertinenti)
+    # TESTI PULITI (solo note pertinenti)
     # ---------------------------
-
-    # Nota DC fault: SOLO per Modo 3 (AC)
     nota_dc_fault = ""
-    if modo_norm == "modo 3":
+    if modo_norm == "modo 3" and (not evse_rdcdd_integrato):
         nota_dc_fault = (
-            "Nota (CEI 64-8/7-722): per il Modo 3 è richiesta protezione contro guasti in DC "
-            "(RCD Tipo B oppure Tipo A + rilevazione 6 mA DC se non integrata nell’EVSE)."
+            "Nota (CEI 64-8/7-722): in assenza di RDC-DD 6 mA DC integrato nell’EVSE, "
+            "è richiesto RCD Tipo B oppure RCD Tipo A + dispositivo 6 mA DC."
         )
 
-    # Nota prese domestiche: SOLO se Modo 1/2 + presa domestica
     nota_presa_dom = ""
     if modo_norm in ("modo 1", "modo 2") and tipo_punto == "Presa domestica":
         nota_presa_dom = "Nota: Modo 1/2 con presa domestica raccomandato solo per ricariche occasionali con componenti idonei."
 
-    # Nota SPD: pulita
     nota_spd = "SPD previsto/valutato." if spd_previsto else "SPD non previsto: valutare protezione da sovratensioni in base a rischio e impianto."
 
-    # Riferimenti normativi: essenziali + SPD solo se previsto/valutato
     riferimenti_normativi = dedent("""
     RIFERIMENTI NORMATIVI E LEGISLATIVI
     - Legge 186/68: regola dell’arte.
     - D.M. 37/08: realizzazione impianti all’interno degli edifici (ove applicabile).
-    - CEI 64-8: impianti elettrici utilizzatori in BT:
+    - CEI 64-8:
       • Parte 4-41: protezione contro i contatti elettrici.
       • Parte 4-43: protezione contro le sovracorrenti.
       • Parte 5-52: condutture (scelta e posa).
@@ -259,6 +317,31 @@ def genera_progetto_ev(
     """).strip()
     if spd_previsto:
         riferimenti_normativi += "\n- CEI EN 62305 / CEI 81-10: valutazione protezione contro sovratensioni (quando applicabile)."
+
+    # blocco verifiche campo (CEI 64-8/6)
+    blocco_prove = ""
+    if note_verifiche_campo:
+        blocco_prove = "PROVE E VERIFICHE IN CAMPO (CEI 64-8/6)\n- " + "\n- ".join(note_verifiche_campo)
+
+    # blocco 4-41
+    blocco_441 = dedent(f"""
+    VERIFICA PROTEZIONE CONTRO CONTATTI INDIRETTI (CEI 64-8/4-41)
+    Esiti OK:
+    {("- " + "\\n- ".join(esito_441["ok"])) if esito_441["ok"] else "- (nessuno)"}
+    Warning:
+    {("- " + "\\n- ".join(esito_441["warning"])) if esito_441["warning"] else "- (nessuno)"}
+    Non conformità:
+    {("- " + "\\n- ".join(esito_441["nonconf"])) if esito_441["nonconf"] else "- (nessuna)"}
+    """).strip()
+
+    # I²t blocco
+    blocco_i2t = ""
+    if smin_i2t is not None:
+        blocco_i2t = (
+            "VERIFICA TERMICA CORTOCIRCUITO (CEI 64-8/4-43)\n"
+            f"- Dati: Icc={icc_ka:.1f} kA, t={t_intervento_s:.3f} s, k≈{K_CU_XLPE}\n"
+            f"- Sezione minima teorica Smin≈{smin_i2t:.1f} mm² (verificare con Icc reale a fine linea e curva del dispositivo)."
+        )
 
     relazione = dedent(f"""
     RELAZIONE TECNICA – INFRASTRUTTURA DI RICARICA VEICOLI ELETTRICI
@@ -277,7 +360,7 @@ def genera_progetto_ev(
     {riferimenti_normativi}
 
     DESCRIZIONE DELL’INTERVENTO
-    Installazione di EVSE di potenza nominale {potenza_kw:.1f} kW alimentata tramite linea dedicata dal quadro elettrico.
+    Installazione EVSE di potenza nominale {potenza_kw:.1f} kW alimentata tramite linea dedicata dal quadro elettrico.
 
     CRITERI DI PROGETTO (CEI 64-8)
     - Caduta di tensione di progetto: ΔV ≤ 4% (CEI 64-8 §525).
@@ -294,6 +377,7 @@ def genera_progetto_ev(
     - Ib = {Ib:.2f} A
     - In = {In} A (curva C)
     - Sezione fase: {sezione} mm²
+    - Sezione PE (criterio 5-54): {sezione_pe} mm²
     - Iz_base = {Iz_base_sel} A | Iz_corr = {Iz_corr:.1f} A
     - Verifica Ib ≤ In ≤ Iz: {"OK" if (Ib <= In <= Iz_corr) else "NON OK"}
 
@@ -301,8 +385,12 @@ def genera_progetto_ev(
     - Sovracorrenti: interruttore MT dedicato alla linea EV.
     - Cortocircuito: Icc presunta = {icc_ka:.1f} kA → {icn_note}
     - Differenziale: {rcd_tipo}, IΔn = {rcd_idn_ma} mA.
+    - RDC-DD 6 mA DC integrato EVSE: {"Sì" if evse_rdcdd_integrato else "No"}.
     {nota_dc_fault if nota_dc_fault else ""}
     {nota_spd}
+
+    {blocco_441}
+    {(blocco_i2t if blocco_i2t else "")}
 
     PRESCRIZIONI CEI 64-8/7 – SEZIONE 722 (CHECK-LIST)
     Esiti OK:
@@ -316,8 +404,11 @@ def genera_progetto_ev(
 
     {nota_presa_dom if nota_presa_dom else ""}
 
+    {blocco_prove if blocco_prove else ""}
+
     NOTE FINALI
-    Le verifiche costituiscono pre-dimensionamento coerente con CEI 64-8. La scelta finale dispositivi va confermata con dati reali e schede EVSE.
+    Le verifiche costituiscono pre-dimensionamento coerente con CEI 64-8. La scelta finale dei dispositivi e la conformità
+    devono essere confermate con dati reali e prove strumentali di cui alla CEI 64-8/6.
     """).strip()
 
     unifilare = dedent(f"""
@@ -334,11 +425,13 @@ def genera_progetto_ev(
     2) Differenziale per punto:
        - Tipo: {rcd_tipo}
        - IΔn: {rcd_idn_ma} mA
+       - RDC-DD 6mA DC integrato EVSE: {"Sì" if evse_rdcdd_integrato else "No"}
     {("   - " + nota_dc_fault) if nota_dc_fault else ""}
 
     3) Linea:
        - Cavo: FG16(O)R16 0,6/1 kV (rame)
        - Sezione fase: {sezione} mm²
+       - Sezione PE: {sezione_pe} mm²
        - Posa: {tipo_posa}
        - Lunghezza: {distanza_m:.1f} m
        - Caduta di tensione: ΔV ≤ 4% (criterio di progetto)
@@ -374,9 +467,11 @@ def genera_progetto_ev(
         "In_a": In,
         "Iz_a": round(Iz_corr, 1),
         "sezione_mm2": sezione,
+        "sezione_pe_mm2": sezione_pe,
         "S_cad_min_mm2": round(S_cad, 2),
         "k_temp": round(k_temp, 2),
         "k_ragg": round(k_ragg, 2),
+        "Smin_i2t_mm2": round(smin_i2t, 1) if smin_i2t is not None else None,
         # testi
         "relazione": relazione,
         "unifilare": unifilare,
@@ -385,7 +480,8 @@ def genera_progetto_ev(
         "ok_722": ok_722,
         "warning_722": warning_722,
         "nonconf_722": nonconf_722,
-        # utili
-        "trifase": trifase,
-        "modo_dc": evse_dc,
+        # 4-41
+        "ok_441": esito_441["ok"],
+        "warning_441": esito_441["warning"],
+        "nonconf_441": esito_441["nonconf"],
     }
