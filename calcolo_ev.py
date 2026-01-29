@@ -344,7 +344,7 @@ def genera_progetto_ev(
         )
 
     relazione = dedent(f"""
-    RELAZIONE TECNICA – INFRASTRUTTURA DI RICARICA VEICOLI ELETTRICI
+    RELAZIONE TECNICA – INFRASTRUTTURA DI RICARICA VEICOLI ELETTRICI - Software eV Field Service 
     ===============================================================
 
     DATI GENERALI
@@ -408,7 +408,7 @@ def genera_progetto_ev(
 
     NOTE FINALI
     Le verifiche costituiscono pre-dimensionamento coerente con CEI 64-8. La scelta finale dei dispositivi e la conformità
-    devono essere confermate con dati reali e prove strumentali di cui alla CEI 64-8/6.
+    devono essere confermate con dati reali e prove strumentali di cui alla CEI 64-8/6. Valido solo se firmato
     """).strip()
 
     unifilare = dedent(f"""
