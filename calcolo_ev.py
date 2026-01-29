@@ -1,59 +1,6 @@
 import math
 from textwrap import dedent
 
-
-def genera_relazione_tecnica(d: dict, riferimenti_normativi: str = "") -> str:
-    """Genera la relazione tecnica (testo) con sezioni descrittive + normative."""
-    from textwrap import dedent
-    return dedent(f"""
-    RELAZIONE TECNICA – INFRASTRUTTURA DI RICARICA VEICOLI ELETTRICI
-    ===============================================================
-
-    DATI GENERALI
-    Committente: {d['nome']} {d['cognome']}
-    Ubicazione: {d['indirizzo']}
-    Sistema di distribuzione: {d.get('sistema','TT')}
-    N. Wallbox: {d.get('n_wallbox',1)}
-    Potenza nominale wallbox: {d.get('potenza_kw',0):.1f} kW
-    Modo di ricarica: {d.get('modo_ricarica','Modo 3')}
-
-    {riferimenti_normativi}
-
-    1. PREMESSA
-    Il progetto a cui fa riferimento il presente documento è relativo alla realizzazione degli impianti elettrici necessari per connettere n. {d.get('n_wallbox',1)} wallbox di ricarica per veicoli elettrici da ubicare presso il box auto sito in {d['indirizzo']}, vista l’intenzione del {d['nome']} {d['cognome']} di dotare il proprio ricovero auto di una postazione di ricarica.
-    Nel presente progetto si è naturalmente tenuto conto della destinazione d’uso sia degli spazi già disponibili, valutando la configurazione degli stessi e sia degli ingombri delle apparecchiature che dovranno essere utilizzati.
-
-    2. OPERE IMPIANTISTICHE PREVISTE
-    Le opere impiantistiche che si prevede di realizzare sono esclusivamente legate all’installazione della sola Wallbox di ricarica veicoli elettrici, che verrà alimentata da una fornitura e relativo quadro elettrico dedicato all’utenza atta a ricaricare il veicolo elettrico; tramite tubazioni esistenti verrà derivato dallo stesso verso il parcheggio sito in {d['indirizzo']}.
-
-    3. DISTRIBUZIONE ELETTRICA
-    La colonnina di ricarica da {d.get('potenza_kw',0):.1f} kW sarà alimentata in bassa tensione (BT) prelevando l’energia dal punto di consegna dell’ente distributore dell’Energia (e-distribuzione) esistente che è in BT.
-
-    3.1 DESCRIZIONE QUADRI E DISTRIBUZIONE IN B.T.
-    La distribuzione in B.T. avverrà partendo dal locale contatori tramite un nuovo quadretto atto a proteggere la linea che alimenta la futura wallbox (QE Generale). Il locale tecnico che ospita tutti i contatori del complesso vedrà la presenza di un ulteriore gruppo di misura oltre che il nuovo interruttore atto ad alimentare la colonnina di ricarica posta al piano seminterrato nel rispettivo parcheggio auto. Nella progettazione dei quadri, particolare cura è stata posta sia al fine di garantire la massima selettività possibile, in caso di cortocircuito, tra gli interruttori posti a valle e quelli posti a monte, sia al fine di garantire la distinzione fisica dei vari moduli dei quadri e delle relative linee in uscita dagli stessi.
-
-    3.1.1 QUADRO GENERALE
-    Lo schema unifilare e la relativa carpenteria sono riportati negli elaborati grafici allegati. Esso è conforme alle norme CEI 17-13/1, CEI 17-113, CEI 17-114, CEI EN 61439-1, CEI EN 61439-2 per le apparecchiature costruite in fabbrica.
-    La distribuzione dal quadro generale ai quadri posti ad esso in cascata avviene mediante cavi multipolari FG16OM16, della sezione indicata negli elaborati progettuali, posati in tubo. Per la linea partente dal quadro si distribuisce anche il conduttore di protezione (FS17 giallo verde) dimensionato secondo CEI 64-8.
-
-    3.1.2 DISTRIBUZIONE ELETTRICA DI ZONA
-    La distribuzione alle varie zone avviene attraverso tubazione in PVC; si precisa che il ricovero auto è alimentato con una tubazione indipendente. Il collegamento al quadro immediatamente a monte sarà effettuato sempre con cavi multipolari del tipo FG16OM16, come anche il collegamento da quadri a singole utenze, quali appunto la colonnina.
-
-    4. SICUREZZA ELETTRICA COLONNINE DI RICARICA
-    L’impianto è conforme alla Circolare 05 novembre 2018, n. 2 (VVF) “Linee guida per l’installazione di infrastrutture per la ricarica dei veicoli elettrici”. In particolare, si considerano a regola dell’arte le stazioni di ricarica conformi a CEI 64-8/7-722, CEI EN 61851 e CEI EN 62196.
-    La stazione di ricarica è collegata al dispositivo di comando di sgancio di emergenza dedicato e integrata con lo sgancio generale dell’edificio (se presente). L’area sarà segnalata con idonea cartellonistica. In attraversamento di compartimentazioni, dovranno essere impiegati sistemi di sigillatura REI idonei (es. collari REI su tubazioni plastiche).
-
-    5. COORDINAMENTO CON IMPIANTO DI TERRA ESISTENTE
-    Nel caso specifico di sistema TT, la protezione dai contatti indiretti sarà garantita rispettando la relazione Rt ≤ 50 / Id, con protezioni differenziali coordinate.
-
-    5.1 DIMENSIONAMENTO IMPIANTO DI TERRA
-    L’impianto di messa a terra è unico per tutto l’edificio; il collegamento avverrà in prossimità della barra equipotenziale esistente, secondo quanto previsto negli elaborati e quanto riscontrato in sito. Il nuovo quadro di BT sarà completo di barra EQP.
-
-    6. CRITERI DI DIMENSIONAMENTO ADOTTATI
-    Il dimensionamento delle condutture e il coordinamento dei dispositivi di protezione è stato eseguito valutando correnti di impiego, cadute di tensione e verifiche termiche, in conformità alla norma CEI 64-8.
-    """).strip()
-
-
 # =========================
 # TABELLE (SEMPLIFICATE)
 # =========================
@@ -112,7 +59,6 @@ def genera_progetto_ev(
     alimentazione: str,
     tipo_posa: str,
     # parametri progetto
-    n_wallbox: int = 1,
     sistema: str = "TT",            # TT / TN-S / TN-C-S
     cosphi: float = 0.95,
     temp_amb: int = 30,
@@ -397,15 +343,73 @@ def genera_progetto_ev(
             f"- Sezione minima teorica Smin≈{smin_i2t:.1f} mm² (verificare con Icc reale a fine linea e curva del dispositivo)."
         )
 
-    relazione = genera_relazione_tecnica({
-        "nome": nome,
-        "cognome": cognome,
-        "indirizzo": indirizzo,
-        "n_wallbox": n_wallbox,
-        "potenza_kw": potenza_kw,
-        "sistema": sistema,
-        "modo_ricarica": modo_ricarica,
-    }, riferimenti_normativi=riferimenti_normativi)
+    relazione = dedent(f"""
+    RELAZIONE TECNICA – INFRASTRUTTURA DI RICARICA VEICOLI ELETTRICI - Software eV Field Service 
+    ===============================================================
+
+    DATI GENERALI
+    Committente: {nome} {cognome}
+    Ubicazione: {indirizzo}
+    Sistema di distribuzione: {sistema}
+    Alimentazione EVSE: {alimentazione}
+    Modo di ricarica: {modo_ricarica}
+    Punto di connessione: {tipo_punto}
+    Installazione esterna: {"Sì" if esterno else "No"}{f" (IP{ip_rating}/IK{ik_rating})" if esterno else ""}
+    Altezza punto di connessione: {altezza_presa_m:.2f} m
+
+    {riferimenti_normativi}
+
+    DESCRIZIONE DELL’INTERVENTO
+    Installazione EVSE di potenza nominale {potenza_kw:.1f} kW alimentata tramite linea dedicata dal quadro elettrico.
+
+    CRITERI DI PROGETTO (CEI 64-8)
+    - Caduta di tensione di progetto: ΔV ≤ 4% (CEI 64-8 §525).
+    - Verifica sovraccarico: Ib ≤ In ≤ Iz (CEI 64-8 §433).
+    - Portate cavo: condizioni standard con fattori correttivi:
+      • Temperatura {temp_amb} °C → kT={k_temp:.2f}
+      • Raggruppamento n={n_linee} → kG={k_ragg:.2f}
+    - Cavo: FG16(O)R16 0,6/1 kV (rame).
+
+    DIMENSIONAMENTO LINEA
+    - Tensione: {tensione} V
+    - cosφ: {cosphi:.2f}
+    - Lunghezza: {distanza_m:.1f} m
+    - Ib = {Ib:.2f} A
+    - In = {In} A (curva C)
+    - Sezione fase: {sezione} mm²
+    - Sezione PE (criterio 5-54): {sezione_pe} mm²
+    - Iz_base = {Iz_base_sel} A | Iz_corr = {Iz_corr:.1f} A
+    - Verifica Ib ≤ In ≤ Iz: {"OK" if (Ib <= In <= Iz_corr) else "NON OK"}
+
+    PROTEZIONI
+    - Sovracorrenti: interruttore MT dedicato alla linea EV.
+    - Cortocircuito: Icc presunta = {icc_ka:.1f} kA → {icn_note}
+    - Differenziale: {rcd_tipo}, IΔn = {rcd_idn_ma} mA.
+    - RDC-DD 6 mA DC integrato EVSE: {"Sì" if evse_rdcdd_integrato else "No"}.
+    {nota_dc_fault if nota_dc_fault else ""}
+    {nota_spd}
+
+    {blocco_441}
+    {(blocco_i2t if blocco_i2t else "")}
+
+    PRESCRIZIONI CEI 64-8/7 – SEZIONE 722 (CHECK-LIST)
+    Esiti OK:
+    {("- " + "\\n- ".join(ok_722)) if ok_722 else "- (nessuno)"}
+
+    Warning:
+    {("- " + "\\n- ".join(warning_722)) if warning_722 else "- (nessuno)"}
+
+    Non conformità:
+    {("- " + "\\n- ".join(nonconf_722)) if nonconf_722 else "- (nessuna)"}
+
+    {nota_presa_dom if nota_presa_dom else ""}
+
+    {blocco_prove if blocco_prove else ""}
+
+    NOTE FINALI
+    Le verifiche costituiscono pre-dimensionamento coerente con CEI 64-8. La scelta finale dei dispositivi e la conformità
+    devono essere confermate con dati reali e prove strumentali di cui alla CEI 64-8/6. Valido solo se firmato
+    """).strip()
 
     unifilare = dedent(f"""
     DATI PER SCHEMA UNIFILARE – LINEA EV
