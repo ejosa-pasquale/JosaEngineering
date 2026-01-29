@@ -1,242 +1,200 @@
-from io import BytesIO
-from xml.sax.saxutils import escape
+#!/usr/bin/env python3
+# documenti_ev.py
+# Esempio completo: header con logo + linea, footer fisso, numeri di pagina "Pagina X di Y"
+# Modifica logo_path, output_pdf e la funzione create_story() per adattarlo al tuo contenuto reale.
 
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Image, Spacer, PageBreak
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.pagesizes import A4
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, PageBreak
-from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.lib.units import cm
+from reportlab.pdfgen import canvas as rl_canvas
+from reportlab.lib import utils
 
-
-def _p(text: str, style):
-    safe = escape(text).replace("\n", "<br/>")
-    return Paragraph(safe, style)
-
-
-def genera_pdf_unico_bytes(
-    relazione: str,
-    unifilare: str,
-    planimetria: str,
-    ok_722=None,
-    warning_722=None,
-    nonconf_722=None
-) -> bytes:
-    ok_722 = ok_722 or []
-    warning_722 = warning_722 or []
-    nonconf_722 = nonconf_722 or []
-
-    buf = BytesIO()
-    styles = getSampleStyleSheet()
-
-    doc = SimpleDocTemplate(
-        buf,
-        pagesize=A4,
-        leftMargin=36,
-        rightMargin=36,
-        topMargin=36,
-        bottomMargin=36
-    )
-
-    story = []
-
-    story.append(_p("RELAZIONE TECNICA", styles["Title"]))
-    story.append(Spacer(1, 12))
-    story.append(_p(relazione, styles["BodyText"]))
-
-    story.append(PageBreak())
-
-    story.append(_p("DATI PER SCHEMA UNIFILARE", styles["Title"]))
-    story.append(Spacer(1, 12))
-    story.append(_p(unifilare, styles["BodyText"]))
-
-    story.append(PageBreak())
-
-    story.append(_p("NOTE PLANIMETRIA", styles["Title"]))
-    story.append(Spacer(1, 12))
-    story.append(_p(planimetria, styles["BodyText"]))
-
-    story.append(PageBreak())
-
-    story.append(_p("CHECK-LIST CEI 64-8/7 – SEZIONE 722", styles["Title"]))
-    story.append(Spacer(1, 12))
-
-    def block(title, items):
-        story.append(_p(title, styles["Heading2"]))
-        story.append(_p("- " + "\n- ".join(items) if items else "- (nessuno)", styles["BodyText"]))
-        story.append(Spacer(1, 10))
-
-    block("Esiti OK", ok_722)
-    block("Warning", warning_722)
-    block("Non conformità", nonconf_722)
-
-    doc.build(story)
-    return buf.getvalue()
-
-"""
-intestazione_professionale.py
-
-Genera un PDF A4 con intestazione professionale (logo + testo).
-Dipendenze: reportlab
-Installazione:
-    pip install reportlab
-Uso:
-    python intestazione_professionale.py
-oppure importare la funzione generate_letterhead() in altro script.
-"""
-
-from reportlab.pdfgen import canvas
-from reportlab.lib.pagesizes import A4
-from reportlab.lib.units import mm
-from reportlab.lib.utils import ImageReader
-from reportlab.lib import colors
-import os
-import math
+# ---------------------------
+# Configurazioni (modifica qui)
+# ---------------------------
+output_pdf = "intestazione_ev_field_service.pdf"
+logo_path = "logo_ev_field_service.png"  # <- percorso del tuo logo (modifica se necessario)
 
 PAGE_WIDTH, PAGE_HEIGHT = A4
 
-def _scale_image_to_fit(img_path, max_w, max_h):
+LEFT_MARGIN = 2 * cm
+RIGHT_MARGIN = 2 * cm
+TOP_MARGIN = 4 * cm     # maggiore per lasciare spazio all'intestazione
+BOTTOM_MARGIN = 2.5 * cm
+
+# Footer text (modifica con i tuoi dati)
+FOOTER_TEXT_LEFT = "Ingegnere Pasquale Senese — Via Esempio 1, Milano — Tel: +39 012 3456789"
+
+# ---------------------------
+# Stili
+# ---------------------------
+styles = getSampleStyleSheet()
+body_style = styles["Normal"]
+h1_style = ParagraphStyle("Heading1", parent=styles["Heading1"], spaceAfter=12)
+
+# ---------------------------
+# Utility per immagini (mantiene aspect ratio)
+# ---------------------------
+def get_image_size(path, width=None, height=None):
     """
-    Restituisce (width, height) scalati mantenendo aspect ratio per
-    adattare un'immagine nelle dimensioni max_w x max_h.
+    Restituisce (width, height) calcolati per l'immagine mantenendo l'aspect ratio.
+    Se width è fornito e height no -> calcola height proporzionale, e viceversa.
     """
     try:
-        img = ImageReader(img_path)
+        img = utils.ImageReader(path)
         iw, ih = img.getSize()
     except Exception:
-        return None, None
-    if iw == 0 or ih == 0:
-        return None, None
-    ratio = min(max_w / iw, max_h / ih)
-    return iw * ratio, ih * ratio
+        return (None, None)
+    if width and not height:
+        height = width * (ih / iw)
+    if height and not width:
+        width = height * (iw / ih)
+    return (width, height)
 
-def generate_letterhead(
-    output_path: str,
-    logo_path: str,
-    company_name: str = "EV Field Service",
-    vat_text: str = "P.IVA IT03823770783",
-    title_line: str = "Ingegnere Pasquale Senese",
-    order_line: str = "Ordine Ingegneri Provincia di Milano",
-    register_line: str = "Numero iscrizione: 34454",
-    page_size=A4,
-    margin_mm: float = 20):
+# ---------------------------
+# Funzioni per header/footer
+# ---------------------------
+def draw_header(canvas, doc):
     """
-    Genera un PDF A4 con intestazione professionale.
-    - output_path: percorso file PDF da scrivere
-    - logo_path: percorso file immagine del logo (png/jpg)
-    - gli altri parametri sono testi visualizzati in intestazione
+    Disegna logo, testo intestazione e linea orizzontale in cima alla pagina.
+    Viene chiamata su ogni pagina tramite onFirstPage/onLaterPages.
     """
-    page_w, page_h = page_size
-    margin = margin_mm * mm
+    canvas.saveState()
 
-    c = canvas.Canvas(output_path, pagesize=page_size)
-
-    # ---- Header region dimensions ----
-    header_height = 40 * mm  # altezza riservata all'intestazione
-    logo_max_height = header_height * 0.8
-    logo_max_width = 60 * mm
-
-    # Coordinates: origin (0,0) bottom-left
-    header_y_top = page_h - margin  # top inside margin
-    header_y_bottom = header_y_top - header_height
-
-    # Draw subtle horizontal rule under header
-    rule_y = header_y_bottom + 6 * mm
-    c.setStrokeColor(colors.HexColor("#d7dbe0"))
-    c.setLineWidth(0.6)
-    c.line(margin, rule_y, page_w - margin, rule_y)
-
-    # ---- Logo placement (left) ----
-    logo_x = margin
-    # compute scaled size
-    logo_w, logo_h = _scale_image_to_fit(logo_path, logo_max_width, logo_max_height)
+    # posizione logo (angolo inferiore-left)
+    logo_width_desired = 6 * cm
+    logo_w, logo_h = get_image_size(logo_path, width=logo_width_desired)
     if logo_w and logo_h:
-        # vertically center logo within header area
-        logo_y = header_y_bottom + (header_height - logo_h) / 2
+        logo_x = LEFT_MARGIN
+        logo_y = PAGE_HEIGHT - (1 * cm) - logo_h  # 1cm dal bordo superiore, poi logo_h in altezza
         try:
-            c.drawImage(logo_path, logo_x, logo_y, width=logo_w, height=logo_h, preserveAspectRatio=True, mask='auto')
+            canvas.drawImage(logo_path, logo_x, logo_y, width=logo_w, height=logo_h, preserveAspectRatio=True, mask='auto')
         except Exception:
-            # If drawImage fails, ignore and continue without logo
-            logo_w, logo_h = 0, 0
-    else:
-        # no logo found or not readable
-        logo_w, logo_h = 0, 0
+            # se non trova/legge logo, skip senza crash
+            pass
 
-    # ---- Text block (right of logo) ----
-    text_block_x = logo_x + (logo_w + 8 * mm if logo_w else 0)
-    text_block_width = page_w - margin - text_block_x
+    # testo intestazione (a destra del logo)
+    text_x = LEFT_MARGIN + (logo_w or logo_width_desired) + (0.6 * cm)
+    text_y_top = PAGE_HEIGHT - (1.1 * cm)  # un po' sotto il bordo superiore
 
-    # Fonts and sizes
-    company_font = "Helvetica-Bold"
-    company_font_size = 18
-    vat_font = "Helvetica"
-    vat_font_size = 9
-    title_font = "Helvetica-Bold"
-    title_font_size = 10
-    meta_font = "Helvetica"
-    meta_font_size = 9
+    canvas.setFont("Helvetica-Bold", 11)
+    canvas.drawString(text_x, text_y_top, "Ingegnere Pasquale Senese")
+    canvas.setFont("Helvetica", 9)
+    canvas.drawString(text_x, text_y_top - 12, "Ordine Ingegneri Provincia di Milano")
+    canvas.drawString(text_x, text_y_top - 24, "Numero iscrizione: 34454")
 
-    # Company name: align top-left of text block
-    text_cursor_y = header_y_top - (company_font_size)  # starting y
-    # Slightly nudge down so company name sits visually centered with logo
-    text_cursor_y -= 6
+    # linea orizzontale sotto l'intestazione
+    # calcola y della linea come la minima altezza occupata (logo o testo) meno piccolo offset
+    lowest_header_y = min(text_y_top - 24, (logo_y if (logo_w and logo_h) else PAGE_HEIGHT - 2*cm))
+    line_y = lowest_header_y - (0.4 * cm)
+    canvas.setLineWidth(0.8)
+    canvas.line(LEFT_MARGIN, line_y, PAGE_WIDTH - RIGHT_MARGIN, line_y)
 
-    c.setFont(company_font, company_font_size)
-    c.setFillColor(colors.HexColor("#0e1921"))  # dark navy
-    # Wrap company name if too long: simple approach using split
-    c.drawString(text_block_x, text_cursor_y, company_name)
+    canvas.restoreState()
 
-    # VAT text under company name
-    text_cursor_y -= (company_font_size + 4)
-    c.setFont(vat_font, vat_font_size)
-    c.setFillColor(colors.HexColor("#333a40"))
-    c.drawString(text_block_x, text_cursor_y, vat_text)
+def draw_footer(canvas, doc):
+    """
+    Disegna il footer fisso; il numero di pagina è disegnato dalla NumberedCanvas.
+    """
+    canvas.saveState()
+    footer_y = BOTTOM_MARGIN - (1.3 * cm)  # dentro il bottom margin
 
-    # On a new line, center the engineer/title block below the rule (or aligned right)
-    # We'll center this block horizontally in page width (classic professional look)
-    center_x = page_w / 2
+    canvas.setFont("Helvetica", 8)
+    # testo a sinistra
+    canvas.drawString(LEFT_MARGIN, footer_y, FOOTER_TEXT_LEFT)
+    canvas.restoreState()
 
-    # Compose lines for center block
-    center_lines = [
-        title_line,
-        order_line,
-        register_line
-    ]
-    # vertical placement: slightly below the rule line
-    center_start_y = rule_y - 14 * mm
+# ---------------------------
+# Canvas personalizzata per "Pagina X di Y"
+# ---------------------------
+class NumberedCanvas(rl_canvas.Canvas):
+    """
+    Canvas che salva lo stato di ogni pagina e alla fine scrive "Pagina X di Y" su ogni pagina.
+    """
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._saved_page_states = []
 
-    # Draw each centered line
-    c.setFillColor(colors.HexColor("#0e1921"))
-    c.setFont(title_font, title_font_size)
-    c.drawCentredString(center_x, center_start_y + 12, center_lines[0])
+    def showPage(self):
+        # salva lo stato corrente della pagina (dizionario) e inizia una nuova pagina
+        self._saved_page_states.append(dict(self.__dict__))
+        self._startPage()
 
-    c.setFont(meta_font, meta_font_size)
-    c.setFillColor(colors.HexColor("#4b5560"))
-    c.drawCentredString(center_x, center_start_y - 2, center_lines[1])
-    c.drawCentredString(center_x, center_start_y - 12, center_lines[2])
+    def save(self):
+        # numero totale pagine
+        total_pages = len(self._saved_page_states)
+        for state in self._saved_page_states:
+            self.__dict__.update(state)
+            # disegna il numero di pagina sulla pagina corrente
+            self.draw_page_number(total_pages)
+            # mostra la pagina (questa chiamata scrive effettivamente la pagina nel PDF)
+            super().showPage()
+        super().save()
 
-    # ---- Optional: small footer with page info (disabled by default) ----
-    # footer_text = "EV Field Service - intestazione ufficiale"
-    # c.setFont("Helvetica-Oblique", 7)
-    # c.setFillColor(colors.HexColor("#9aa3ab"))
-    # c.drawRightString(page_w - margin, margin / 2, footer_text)
+    def draw_page_number(self, total_pages):
+        page_num = self.getPageNumber()
+        text = f"Pagina {page_num} di {total_pages}"
+        self.setFont("Helvetica", 8)
+        # drawRightString: allinea a destra per rimanere dentro i margini
+        x = PAGE_WIDTH - RIGHT_MARGIN
+        y = BOTTOM_MARGIN - (1.3 * cm)
+        self.drawRightString(x, y, text)
 
-    # Finalize PDF (single blank page with header)
-    c.showPage()
-    c.save()
-    print(f"PDF generato: {output_path}")
+# ---------------------------
+# Funzione che crea il contenuto (story)
+# ---------------------------
+def create_story():
+    """
+    Qui costruisci il tuo 'story' esattamente come lo fai ora in documenti_ev.py.
+    Ho messo un esempio con vari paragrafi; sostituisci o estendi questa funzione
+    con il codice reale che genera il contenuto del tuo PDF.
+    """
+    story = []
 
-if __name__ == "__main__":
-    # esempio di utilizzo
-    logo_file = "logo_ev_field_service.png"   # <<-- metti qui il percorso reale del logo
-    output_file = "intestazione_ev_field_service_professionale.pdf"
-
-    # se il logo non si trova, il codice genera comunque il PDF senza l'immagine
-    if not os.path.isfile(logo_file):
-        print(f"ATTENZIONE: logo non trovato in '{logo_file}'. Il PDF verrà comunque generato senza logo.")
-    generate_letterhead(
-        output_path=output_file,
-        logo_path=logo_file,
-        company_name="EV Field Service",
-        vat_text="P.IVA IT03823770783",
-        title_line="Ingegnere Pasquale Senese",
-        order_line="Ordine Ingegneri Provincia di Milano",
-        register_line="Numero iscrizione: 34454"
+    # Esempio: titolo e paragrafi multipli per generare più pagine
+    story.append(Paragraph("Relazione Tecnica - Esempio", h1_style))
+    example_text = (
+        "Questo paragrafo è un testo di esempio per mostrare la formattazione "
+        "e l'effetto di multipli paragrafi all'interno del PDF. "
+        "Sostituisci questo contenuto con il tuo story reale."
     )
+    for i in range(1, 35):
+        story.append(Paragraph(f"<b>Sezione {i}</b><br/>{example_text}", body_style))
+        story.append(Spacer(1, 0.4 * cm))
+
+    # Se vuoi forzare una nuova pagina: story.append(PageBreak())
+    return story
+
+# ---------------------------
+# Creazione del documento e build
+# ---------------------------
+def build_pdf():
+    # crea il template SimpleDocTemplate (assicurati topMargin sufficientemente grande)
+    doc = SimpleDocTemplate(
+        output_pdf,
+        pagesize=A4,
+        rightMargin=RIGHT_MARGIN,
+        leftMargin=LEFT_MARGIN,
+        topMargin=TOP_MARGIN,
+        bottomMargin=BOTTOM_MARGIN
+    )
+
+    # ottieni lo story (sostituisci create_story con la tua logica se necessario)
+    story = create_story()
+
+    # build con header/footer e canvas personalizzato per il numero pagine
+    doc.build(
+        story,
+        onFirstPage=lambda canv, doc_obj: (draw_header(canv, doc_obj), draw_footer(canv, doc_obj)),
+        onLaterPages=lambda canv, doc_obj: (draw_header(canv, doc_obj), draw_footer(canv, doc_obj)),
+        canvasmaker=NumberedCanvas
+    )
+
+    print(f"PDF creato: {output_pdf}")
+
+# ---------------------------
+# Entry point
+# ---------------------------
+if __name__ == "__main__":
+    build_pdf()
