@@ -107,7 +107,7 @@ def genera_progetto_ev(
         raise ValueError("IΔn tipica: 30/100/300 mA.")
 
     trifase = "trifase" in alimentazione.lower()
-    tensione = 400 if trifase else 230
+    tensione = 400 if trifase else 220
 
     # Monofase max 7.4 kW
     if (not trifase) and (potenza_kw > 7.4):
