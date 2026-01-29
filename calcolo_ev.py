@@ -48,11 +48,169 @@ def _pe_da_fase(sez_fase_mm2: int) -> int:
     return int(math.ceil(sez_fase_mm2 / 2))
 
 
+
+def genera_relazione_tecnica(
+    d: dict,
+    *,
+    riferimenti_normativi: str,
+    blocco_441: str,
+    blocco_i2t: str,
+    blocco_prove: str,
+    ok_722: list[str],
+    warning_722: list[str],
+    nonconf_722: list[str],
+) -> str:
+    """Relazione tecnica completa con sezioni descrittive + risultati calcolo + verifiche."""
+
+    premessa = dedent(f"""
+    PREMESSA
+
+    Il progetto a cui fa riferimento il presente documento è relativo alla realizzazione degli impianti elettrici necessari per
+    connettere n. {d['n_wallbox']} wallbox di ricarica per veicoli elettrici da ubicare presso il box auto identificato in
+    {d['indirizzo']}, vista l’intenzione del Sig. {d['nome']} {d['cognome']} di dotare il proprio ricovero auto di una postazione
+    di ricarica.
+
+    Nel presente progetto si è naturalmente tenuto conto della destinazione d’uso degli spazi già disponibili, valutando la
+    configurazione degli stessi e gli ingombri delle apparecchiature che dovranno essere utilizzate.
+    """).strip()
+
+    opere = dedent(f"""
+    2. OPERE IMPIANTISTICHE PREVISTE
+
+    Le opere impiantistiche che si prevede di realizzare sono esclusivamente legate all’installazione della/e Wallbox di ricarica
+    veicoli elettrici, che verrà/verranno alimentata/e da una fornitura e relativo quadro elettrico dedicato all’utenza atta a
+    ricaricare il veicolo elettrico; tramite tubazioni esistenti verrà derivato l’alimentatore verso il parcheggio sito in
+    {d['indirizzo']}.
+    """).strip()
+
+    distribuzione = dedent(f"""
+    3. DISTRIBUZIONE ELETTRICA
+
+    La colonnina di ricarica da {d['potenza_kw']:.1f} kW sarà alimentata in bassa tensione (BT) prelevando l’energia dal punto di
+    consegna dell’ente distributore dell’Energia (e-distribuzione) esistente che è in BT.
+
+    3.1 DESCRIZIONE QUADRI E DISTRIBUZIONE IN B.T.
+
+    La distribuzione in B.T. avverrà partendo dal locale contatori tramite un nuovo quadretto atto a proteggere la linea che
+    alimenta la futura wallbox (QE Generale). Il locale tecnico che ospita tutti i contatori del complesso vedrà la presenza di
+    un ulteriore gruppo di misura oltre che il nuovo interruttore atto ad alimentare la colonnina di ricarica posta al piano
+    seminterrato nel rispettivo parcheggio auto.
+
+    Nella progettazione dei quadri, particolare cura è stata posta sia al fine di garantire la massima selettività possibile, in
+    caso di cortocircuito, tra gli interruttori posti a valle e quelli posti a monte, sia al fine di garantire la distinzione
+    fisica dei vari moduli dei quadri e delle relative linee in uscita dagli stessi.
+
+    3.1.1 QUADRO GENERALE
+
+    Lo schema unifilare e la relativa carpenteria sono riportati negli elaborati grafici allegati. Esso è conforme alle norme
+    CEI EN 61439-1 e CEI EN 61439-2 per le apparecchiature costruite in fabbrica.
+
+    La distribuzione dal quadro generale ai quadri posti ad esso in cascata avviene mediante cavi multipolari FG16OM16, della
+    sezione indicata negli elaborati progettuali, posati in tubo.
+
+    3.1.2 DISTRIBUZIONE ELETTRICA DI ZONA
+
+    La distribuzione alle varie zone avviene attraverso tubazione in PVC; il ricovero auto è alimentato con una tubazione
+    indipendente. Il collegamento al quadro immediatamente a monte sarà effettuato con cavi multipolari del tipo FG16OM16, come
+    anche il collegamento da quadri a singole utenze, quali la colonnina.
+    """).strip()
+
+    sicurezza = dedent("""
+    4. SICUREZZA ELETTRICA COLONNINE DI RICARICA
+
+    Come indicato nella Circolare 05 novembre 2018, n. 2 (Ministero dell’Interno – Dipartimento dei Vigili del Fuoco),
+    “Linee guida per l’installazione di infrastrutture per la ricarica dei veicoli elettrici”, le colonnine per la ricarica non
+    sono attività soggette ai controlli di prevenzione incendi in quanto non comprese nell’allegato I del DPR 151/2011, ma la
+    loro installazione, in un’attività esistente, è da considerare modifica alla stessa.
+
+    L’infrastruttura proposta, costituita da stazione di ricarica AC in Modo 3 conforme alle norme CEI e predisposta per la
+    ricarica conduttiva, è stata progettata e installata in linea con le prescrizioni vigenti. L’impianto è connesso ai
+    dispositivi di sgancio generale dell’edificio, garantendo la piena integrazione con i sistemi di sicurezza elettrica.
+
+    Si precisa infine che nei punti in cui bisognerà attraversare le compartimentazioni, bisogna prevedere un sistema di
+    sigillatura REI per impianti (es. collari REI o sistemi equivalenti) per garantire la compartimentazione di progetto.
+    """).strip()
+
+    terra = dedent(f"""
+    5. COORDINAMENTO CON IMPIANTO DI TERRA ESISTENTE
+
+    Nel caso specifico (sistema {d['sistema']}), la protezione dai contatti indiretti sarà garantita nel rispetto della CEI 64-8,
+    coordinando impianto di terra e dispositivi di protezione differenziale/magnetotermica.
+
+    5.1 DIMENSIONAMENTO IMPIANTO DI TERRA
+    L’impianto di messa a terra è unico per tutto l’edificio; la protezione contro i contatti indiretti è assicurata dalla
+    resistenza di terra complessiva e dalla protezione differenziale prevista per le diverse linee.
+    """).strip()
+
+    criteri = dedent("""
+    6. CRITERI DI DIMENSIONAMENTO ADOTTATI
+
+    6.1 Calcolo della corrente di impiego
+    Il dimensionamento delle condutture e il coordinamento dei dispositivi di protezione è stato eseguito valutando le correnti di
+    impiego relative a ciascuna linea sulla base dell’analisi dei carichi da alimentare.
+
+    6.2 Caduta di tensione
+    Il dimensionamento delle linee è stato effettuato considerando limiti di caduta di tensione coerenti con la CEI 64-8/5-52.
+
+    6.3 Criterio di scelta delle apparecchiature di protezione
+    La protezione contro sovraccarico e cortocircuito è verificata secondo la CEI 64-8/4-43 e CEI 64-8/5-53 (Ib < In < Iz).
+    """).strip()
+
+    risultati = dedent(f"""
+    7. RISULTATI DI CALCOLO (SINTESI)
+
+    - Alimentazione: {d['alimentazione']}
+    - Potenza considerata per dimensionamento: {d['potenza_tot_kw']:.1f} kW
+      (EVSE nominale {d['potenza_kw']:.1f} kW x n.{d['n_wallbox']} wallbox{"; gestione carichi attiva" if d['gestione_carichi'] and d['n_wallbox']>1 else ""})
+    - Tensione: {d['tensione']} V
+    - cosφ: {d['cosphi']:.2f}
+    - Lunghezza: {d['distanza_m']:.1f} m
+    - Ib: {d['Ib']:.2f} A
+    - In: {d['In']} A (curva C)
+    - Sezione fase: {d['sezione']} mm²
+    - Sezione PE: {d['sezione_pe']} mm²
+    - Iz (corretta): {d['Iz_corr']:.1f} A
+    - Verifica Ib ≤ In ≤ Iz: {"OK" if d['verifica_ib_in_iz'] else "NON OK"}
+    """).strip()
+
+    checklist = dedent(f"""
+    8. CHECK-LIST CEI 64-8/7 – SEZIONE 722
+
+    Esiti OK:
+    {("- " + "\n- ".join(ok_722)) if ok_722 else "- (nessuno)"}
+
+    Warning:
+    {("- " + "\n- ".join(warning_722)) if warning_722 else "- (nessuno)"}
+
+    Non conformità:
+    {("- " + "\n- ".join(nonconf_722)) if nonconf_722 else "- (nessuna)"}
+    """).strip()
+
+    return "\n\n".join([
+        "RELAZIONE TECNICA – INFRASTRUTTURA DI RICARICA VEICOLI ELETTRICI",
+        premessa,
+        opere,
+        distribuzione,
+        sicurezza,
+        terra,
+        criteri,
+        "RIFERIMENTI NORMATIVI E LEGISLATIVI",
+        riferimenti_normativi.strip(),
+        risultati,
+        blocco_441.strip(),
+        (blocco_i2t.strip() if blocco_i2t else ""),
+        (blocco_prove.strip() if blocco_prove else ""),
+        checklist,
+        "NOTE FINALI\nLe verifiche costituiscono pre-dimensionamento coerente con CEI 64-8. La scelta finale dei dispositivi e la conformità devono essere confermate con dati reali e prove strumentali di cui alla CEI 64-8/6."
+    ]).strip()
+
+
 def genera_progetto_ev(
     # anagrafica
     nome: str,
     cognome: str,
     indirizzo: str,
+    n_wallbox: int = 1,
     # dati elettrici
     potenza_kw: float,
     distanza_m: float,
@@ -109,17 +267,25 @@ def genera_progetto_ev(
     trifase = "trifase" in alimentazione.lower()
     tensione = 400 if trifase else 220
 
+    # Potenza totale considerata per dimensionamento
+    if n_wallbox < 1:
+        raise ValueError("Numero wallbox deve essere >= 1.")
+    potenza_tot_kw = potenza_kw * n_wallbox
+    # Se è prevista gestione carichi, assumiamo una contemporaneità più favorevole (una wallbox alla volta).
+    if n_wallbox > 1 and gestione_carichi:
+        potenza_tot_kw = potenza_kw
+
     # Monofase max 7.4 kW
-    if (not trifase) and (potenza_kw > 7.4):
-        raise ValueError("In monofase la potenza massima ammessa è 7,4 kW. Seleziona trifase o riduci la potenza.")
+    if (not trifase) and (potenza_tot_kw > 7.4):
+        raise ValueError("In monofase la potenza massima ammessa è 7,4 kW. Seleziona trifase o riduci la potenza (totale considerata).")
 
     # ---------------------------
     # Ib
     # ---------------------------
     if trifase:
-        Ib = (potenza_kw * 1000) / (math.sqrt(3) * tensione * cosphi)
+        Ib = (potenza_tot_kw * 1000) / (math.sqrt(3) * tensione * cosphi)
     else:
-        Ib = (potenza_kw * 1000) / (tensione * cosphi)
+        Ib = (potenza_tot_kw * 1000) / (tensione * cosphi)
 
     # ---------------------------
     # In
@@ -228,7 +394,7 @@ def genera_progetto_ev(
     warning_722, nonconf_722, ok_722 = [], [], []
     modo_norm = modo_ricarica.strip().lower()
 
-    ok_722.append("Circuito dedicato per punto di ricarica (linea dedicata dimensionata).")
+    ok_722.append("Circuito dedicato per infrastruttura di ricarica (linea dedicata dimensionata).")
 
     if n_linee > 1:
         if gestione_carichi:
@@ -343,73 +509,35 @@ def genera_progetto_ev(
             f"- Sezione minima teorica Smin≈{smin_i2t:.1f} mm² (verificare con Icc reale a fine linea e curva del dispositivo)."
         )
 
-    relazione = dedent(f"""
-    RELAZIONE TECNICA – INFRASTRUTTURA DI RICARICA VEICOLI ELETTRICI - Software eV Field Service 
-    ===============================================================
-
-    DATI GENERALI
-    Committente: {nome} {cognome}
-    Ubicazione: {indirizzo}
-    Sistema di distribuzione: {sistema}
-    Alimentazione EVSE: {alimentazione}
-    Modo di ricarica: {modo_ricarica}
-    Punto di connessione: {tipo_punto}
-    Installazione esterna: {"Sì" if esterno else "No"}{f" (IP{ip_rating}/IK{ik_rating})" if esterno else ""}
-    Altezza punto di connessione: {altezza_presa_m:.2f} m
-
-    {riferimenti_normativi}
-
-    DESCRIZIONE DELL’INTERVENTO
-    Installazione EVSE di potenza nominale {potenza_kw:.1f} kW alimentata tramite linea dedicata dal quadro elettrico.
-
-    CRITERI DI PROGETTO (CEI 64-8)
-    - Caduta di tensione di progetto: ΔV ≤ 4% (CEI 64-8 §525).
-    - Verifica sovraccarico: Ib ≤ In ≤ Iz (CEI 64-8 §433).
-    - Portate cavo: condizioni standard con fattori correttivi:
-      • Temperatura {temp_amb} °C → kT={k_temp:.2f}
-      • Raggruppamento n={n_linee} → kG={k_ragg:.2f}
-    - Cavo: FG16(O)R16 0,6/1 kV (rame).
-
-    DIMENSIONAMENTO LINEA
-    - Tensione: {tensione} V
-    - cosφ: {cosphi:.2f}
-    - Lunghezza: {distanza_m:.1f} m
-    - Ib = {Ib:.2f} A
-    - In = {In} A (curva C)
-    - Sezione fase: {sezione} mm²
-    - Sezione PE (criterio 5-54): {sezione_pe} mm²
-    - Iz_base = {Iz_base_sel} A | Iz_corr = {Iz_corr:.1f} A
-    - Verifica Ib ≤ In ≤ Iz: {"OK" if (Ib <= In <= Iz_corr) else "NON OK"}
-
-    PROTEZIONI
-    - Sovracorrenti: interruttore MT dedicato alla linea EV.
-    - Cortocircuito: Icc presunta = {icc_ka:.1f} kA → {icn_note}
-    - Differenziale: {rcd_tipo}, IΔn = {rcd_idn_ma} mA.
-    - RDC-DD 6 mA DC integrato EVSE: {"Sì" if evse_rdcdd_integrato else "No"}.
-    {nota_dc_fault if nota_dc_fault else ""}
-    {nota_spd}
-
-    {blocco_441}
-    {(blocco_i2t if blocco_i2t else "")}
-
-    PRESCRIZIONI CEI 64-8/7 – SEZIONE 722 (CHECK-LIST)
-    Esiti OK:
-    {("- " + "\\n- ".join(ok_722)) if ok_722 else "- (nessuno)"}
-
-    Warning:
-    {("- " + "\\n- ".join(warning_722)) if warning_722 else "- (nessuno)"}
-
-    Non conformità:
-    {("- " + "\\n- ".join(nonconf_722)) if nonconf_722 else "- (nessuna)"}
-
-    {nota_presa_dom if nota_presa_dom else ""}
-
-    {blocco_prove if blocco_prove else ""}
-
-    NOTE FINALI
-    Le verifiche costituiscono pre-dimensionamento coerente con CEI 64-8. La scelta finale dei dispositivi e la conformità
-    devono essere confermate con dati reali e prove strumentali di cui alla CEI 64-8/6. Valido solo se firmato
-    """).strip()
+    relazione = genera_relazione_tecnica(
+        {
+            "nome": nome,
+            "cognome": cognome,
+            "indirizzo": indirizzo,
+            "n_wallbox": n_wallbox,
+            "potenza_kw": potenza_kw,
+            "potenza_tot_kw": potenza_tot_kw,
+            "alimentazione": alimentazione,
+            "sistema": sistema,
+            "tensione": tensione,
+            "cosphi": cosphi,
+            "distanza_m": distanza_m,
+            "Ib": Ib,
+            "In": In,
+            "sezione": sezione,
+            "sezione_pe": sezione_pe,
+            "Iz_corr": Iz_corr,
+            "verifica_ib_in_iz": (Ib <= In <= Iz_corr),
+            "gestione_carichi": gestione_carichi,
+        },
+        riferimenti_normativi=riferimenti_normativi,
+        blocco_441=blocco_441,
+        blocco_i2t=blocco_i2t,
+        blocco_prove=blocco_prove,
+        ok_722=ok_722,
+        warning_722=warning_722,
+        nonconf_722=nonconf_722,
+    )
 
     unifilare = dedent(f"""
     DATI PER SCHEMA UNIFILARE – LINEA EV
@@ -440,7 +568,7 @@ def genera_progetto_ev(
        - {"Previsto/valutato" if spd_previsto else "Non previsto"}
 
     5) Carico:
-       - EVSE {potenza_kw:.1f} kW, {alimentazione}, {modo_ricarica}
+       - EVSE {potenza_kw:.1f} kW x n.{n_wallbox} (totale considerata {potenza_tot_kw:.1f} kW), {alimentazione}, {modo_ricarica}
     """).strip()
 
     planimetria = dedent(f"""
@@ -463,6 +591,8 @@ def genera_progetto_ev(
     return {
         # numeri
         "tensione_v": tensione,
+        "n_wallbox": n_wallbox,
+        "potenza_tot_kw": round(potenza_tot_kw, 2),
         "Ib_a": round(Ib, 2),
         "In_a": In,
         "Iz_a": round(Iz_corr, 1),
