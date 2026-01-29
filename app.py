@@ -1,11 +1,11 @@
 import streamlit as st
 
-from calcolo_ev_updated import genera_progetto_ev, PORTATA_BASE
+from calcolo_ev_fixed import genera_progetto_ev, PORTATA_BASE
 from documenti_ev import genera_pdf_unico_bytes
 
 st.set_page_config(page_title="Progetto EV – CEI 64-8/722", page_icon="⚡", layout="wide")
 
-st.title("⚡ Progetto linea EV – CEI 64-8 / 722")
+st.title("⚡ Progetto linea EV – CEI 64-8 ")
 st.caption("Progetto Elettrico - Infrastruttura di Ricarica eVFs ")
 
 st.divider()
@@ -15,7 +15,6 @@ with c1:
     nome = st.text_input("Nome", "Mario")
     cognome = st.text_input("Cognome", "Rossi")
     indirizzo = st.text_input("Indirizzo impianto", "Via Garibaldi 1, Mantova")
-    n_wallbox = st.number_input("N. wallbox", min_value=1, max_value=10, value=1, step=1)
 
 with c2:
     alimentazione = st.selectbox("Alimentazione", ["Monofase 230 V", "Trifase 400 V"], index=1)
@@ -94,7 +93,6 @@ if st.button("✅ Calcola e genera documenti", type="primary"):
             nome=nome,
             cognome=cognome,
             indirizzo=indirizzo,
-            n_wallbox=int(n_wallbox),
             potenza_kw=potenza_kw,
             distanza_m=distanza_m,
             alimentazione=alimentazione,
