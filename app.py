@@ -1,6 +1,6 @@
 import streamlit as st
 
-from calcolo_ev_fixed import genera_progetto_ev, PORTATA_BASE
+from calcolo_ev import genera_progetto_ev, PORTATA_BASE
 from documenti_ev import genera_pdf_unico_bytes
 
 st.set_page_config(page_title="Progetto EV – CEI 64-8/722", page_icon="⚡", layout="wide")
