@@ -17,11 +17,13 @@ def genera_pdf_unico_bytes(
     planimetria: str,
     ok_722=None,
     warning_722=None,
-    nonconf_722=None
+    nonconf_722=None,
+    checklist_6=None,
 ) -> bytes:
     ok_722 = ok_722 or []
     warning_722 = warning_722 or []
     nonconf_722 = nonconf_722 or []
+    checklist_6 = checklist_6 or []
 
     buf = BytesIO()
     styles = getSampleStyleSheet()
@@ -37,24 +39,25 @@ def genera_pdf_unico_bytes(
 
     story = []
 
+    # Pagina 1 – Relazione
     story.append(_p("RELAZIONE TECNICA", styles["Title"]))
     story.append(Spacer(1, 12))
     story.append(_p(relazione, styles["BodyText"]))
 
+    # Pagina 2 – Unifilare
     story.append(PageBreak())
-
     story.append(_p("DATI PER SCHEMA UNIFILARE", styles["Title"]))
     story.append(Spacer(1, 12))
     story.append(_p(unifilare, styles["BodyText"]))
 
+    # Pagina 3 – Planimetria
     story.append(PageBreak())
-
     story.append(_p("NOTE PLANIMETRIA", styles["Title"]))
     story.append(Spacer(1, 12))
     story.append(_p(planimetria, styles["BodyText"]))
 
+    # Pagina 4 – Checklist 722
     story.append(PageBreak())
-
     story.append(_p("CHECK-LIST CEI 64-8/7 – SEZIONE 722", styles["Title"]))
     story.append(Spacer(1, 12))
 
@@ -66,6 +69,12 @@ def genera_pdf_unico_bytes(
     block("Esiti OK", ok_722)
     block("Warning", warning_722)
     block("Non conformità", nonconf_722)
+
+    # Pagina 5 – Checklist 64-8/6
+    story.append(PageBreak())
+    story.append(_p("CHECK-LIST CEI 64-8/6 – PROVE E VERIFICHE IN CAMPO", styles["Title"]))
+    story.append(Spacer(1, 12))
+    story.append(_p("- " + "\n- ".join(checklist_6) if checklist_6 else "- (nessuna voce impostata)", styles["BodyText"]))
 
     doc.build(story)
     return buf.getvalue()
