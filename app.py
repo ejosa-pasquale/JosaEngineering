@@ -5,8 +5,8 @@ from documenti_ev import genera_pdf_unico_bytes
 
 st.set_page_config(page_title="Progetto EV – CEI 64-8/722", page_icon="⚡", layout="wide")
 
-st.title("⚡ Progetto linea EV – CEI 64-8 (incl. Sez. 722)")
-st.caption("Tool di pre-dimensionamento e documentazione tecnica (Relazione + Unifilare + Planimetria + Checklist 722).")
+st.title("⚡ Progetto linea EV – CEI 64-8")
+st.caption("Progetto Elettrico - Smart Charging eVFs")
 
 st.divider()
 
@@ -21,14 +21,20 @@ with c1:
     indirizzo = st.text_input("Indirizzo impianto", "Via Garibaldi 1, Mantova")
 
 with c2:
-    potenza_kw = st.number_input("Potenza EVSE (kW)", min_value=1.0, max_value=250.0, value=22.0, step=1.0)
+    alimentazione = st.selectbox("Alimentazione", ["Monofase 230 V", "Trifase 400 V"], index=1)
+    # max potenza dipende da alimentazione (monofase 7.4)
+    max_kw = 7.4 if alimentazione == "Monofase 230 V" else 250.0
+    potenza_kw = st.number_input("Potenza EVSE (kW)", min_value=1.0, max_value=float(max_kw), value=min(22.0, max_kw), step=0.5)
     distanza_m = st.number_input("Distanza quadro → EVSE (m)", min_value=1.0, max_value=500.0, value=35.0, step=1.0)
-    alimentazione = st.selectbox("Alimentazione", ["Monofase 230 V", "Trifase 400 V"])
 
 with c3:
     tipo_posa = st.selectbox("Tipo posa", list(PORTATA_BASE.keys()))
     sistema = st.selectbox("Sistema di distribuzione", ["TT", "TN-S", "TN-C-S"])
     icc_ka = st.number_input("Icc presunta al punto (kA)", min_value=1.0, max_value=50.0, value=6.0, step=0.5)
+
+# guard rail UI (extra)
+if alimentazione == "Monofase 230 V" and potenza_kw > 7.4:
+    st.warning("In monofase la potenza massima ammessa è 7,4 kW. Riduci la potenza o seleziona trifase.")
 
 st.subheader("Parametri di progetto")
 p1, p2, p3, p4 = st.columns(4)
@@ -76,6 +82,11 @@ if "res" not in st.session_state:
     st.session_state.res = None
 
 if st.button("✅ Calcola e genera documenti", type="primary"):
+    # guard rail definitivo prima del calcolo
+    if alimentazione == "Monofase 230 V" and potenza_kw > 7.4:
+        st.error("Monofase: potenza > 7,4 kW non ammessa. Correggi i dati.")
+        st.stop()
+
     try:
         res = genera_progetto_ev(
             nome=nome,
@@ -120,7 +131,6 @@ if res:
 
     st.divider()
 
-    # Tabs documenti
     tab1, tab2, tab3, tab4 = st.tabs(["Relazione", "Unifilare", "Planimetria", "Checklist 722"])
 
     with tab1:
@@ -131,10 +141,7 @@ if res:
         st.text_area("Note planimetria", value=res["planimetria"], height=420)
     with tab4:
         st.subheader("Esiti OK")
-        if res["ok_722"]:
-            st.success("\n".join([f"• {x}" for x in res["ok_722"]]))
-        else:
-            st.write("—")
+        st.write("\n".join([f"• {x}" for x in res["ok_722"]]) if res["ok_722"] else "—")
 
         st.subheader("Warning")
         if res["warning_722"]:
@@ -150,7 +157,7 @@ if res:
 
     st.divider()
 
-    # Download PDF unico
+    # PDF unico
     pdf_bytes = genera_pdf_unico_bytes(
         relazione=res["relazione"],
         unifilare=res["unifilare"],
