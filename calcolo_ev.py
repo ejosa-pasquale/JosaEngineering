@@ -345,21 +345,26 @@ def genera_progetto_ev(
 
     relazione = dedent(f"""
     RELAZIONE TECNICA – INFRASTRUTTURA DI RICARICA VEICOLI ELETTRICI - Software eV Field Service 
+    
     1. Premessa
     Il progetto a cui fa riferimento il presente documento è relativo alla realizzazione degli impianti elettrici necessari per la connessione di un’infrastruttura di ricarica per veicoli elettrici.
     Nel presente progetto si è tenuto conto della destinazione d’uso degli spazi già disponibili, valutando la configurazione degli stessi, nonché degli ingombri delle apparecchiature che verranno installate.
     L’intervento è finalizzato esclusivamente alla predisposizione e all’alimentazione di una stazione di ricarica tipo Wallbox, destinata alla ricarica di veicoli elettrici in ambito condominiale.
+    
     2. Opere impiantistiche previste
     Le opere impiantistiche previste sono esclusivamente legate all’installazione di una Wallbox per la ricarica di veicoli elettrici, alimentata tramite fornitura elettrica dedicata e relativo quadro elettrico di protezione.
     L’alimentazione verrà derivata, mediante l’utilizzo di tubazioni esistenti, dal quadro elettrico dedicato verso il parcheggio sito in (indirizzo), dove sarà installata la stazione di ricarica.
+    
     3. Distribuzione elettrica
     La colonnina di ricarica sarà alimentata in bassa tensione (BT) prelevando l’energia dal punto di consegna dell’Ente Distributore (e-distribuzione) esistente.
+    
     3.1 Descrizione quadri e distribuzione in B.T.
     La distribuzione in bassa tensione avverrà partendo dal locale contatori, mediante l’installazione di un nuovo quadretto elettrico dedicato (QE Generale), atto a proteggere la linea di alimentazione della Wallbox.
     Nel locale tecnico, che ospita i contatori dell’intero complesso, verrà installato un ulteriore gruppo di misura, oltre al nuovo interruttore di protezione per l’alimentazione della colonnina di ricarica posta al piano seminterrato, in corrispondenza del posto auto assegnato.
     Nella progettazione dei quadri è stata posta particolare attenzione:
     alla massima selettività possibile tra dispositivi di protezione a monte e a valle;
     alla distinzione fisica dei moduli e delle linee in uscita.
+    
     3.1.1 Quadro Generale
     Lo schema unifilare e la carpenteria del quadro generale sono riportati negli elaborati grafici allegati.
     Il quadro è conforme alle seguenti normative:
@@ -371,29 +376,30 @@ def genera_progetto_ev(
     La distribuzione dal quadro generale ai quadri posti in cascata avverrà mediante cavi multipolari FG16OM16, di sezione indicata negli elaborati progettuali, posati in tubo.
     L’identificazione dei conduttori sarà realizzata tramite: isolamento a colori codificati; manicotti termorestringenti o spirali in nylon colorato; piastrine identificative.
     Per ogni linea sarà distribuito il conduttore di protezione (FS17 giallo-verde) di sezione adeguata, tale da garantire la protezione contro i contatti indiretti in funzione della taratura delle protezioni magnetotermiche installate.
+    
     3.1.2 Distribuzione elettrica di zona
-    La distribuzione alle varie zone avverrà mediante tubazioni in PVC.
-    Il ricovero auto sarà alimentato tramite tubazione indipendente.
-    I collegamenti:
-    tra quadri; tra quadri e utenze finali (Wallbox), saranno realizzati con cavi multipolari FG16OM(R)16.
+    La distribuzione alle varie zone avverrà mediante tubazioni in PVC. Il ricovero auto sarà alimentato tramite tubazione indipendente.
+    I collegamenti: tra quadri; tra quadri e utenze finali (Wallbox), saranno realizzati con cavi multipolari FG16OM(R)16.
+    
     4. Sicurezza elettrica delle colonnine di ricarica
     In riferimento alla Circolare del Ministero dell’Interno del 05 novembre 2018 n. 2, le infrastrutture di ricarica per veicoli elettrici non rientrano tra le attività soggette ai controlli di prevenzione incendi ai sensi del D.P.R. 151/2011, ma la loro installazione costituisce modifica all’attività esistente.
     L’impianto oggetto del presente documento sarà conforme alla suddetta Circolare.
     L’infrastruttura proposta consiste in una colonnina di ricarica AC da 22 kW, conforme alle norme CEI e predisposta per la ricarica in Modo 3.
-    La stazione di ricarica:
-    è conforme alle Norme CEI 64-8, Sezione 722;
-    è conforme alle norme CEI EN 61851 e CEI EN 62196;
-    è collegata ai dispositivi di sgancio generale dell’edificio.
+    La stazione di ricarica: è conforme alle Norme CEI 64-8, Sezione 722; è conforme alle norme CEI EN 61851 e CEI EN 62196; è collegata ai dispositivi di sgancio generale dell’edificio.
+   
     4.1 Dispositivo di sgancio di emergenza
     La Wallbox è collegata a un dispositivo di sgancio elettrico di emergenza dedicato, installato in autorimessa in prossimità del pulsante di sgancio generale esistente.
     In caso di emergenza, l’azionamento del pulsante provoca il sezionamento dell’alimentazione elettrica della colonnina.
     L’attività è soggetta a prevenzione incendi e risulta depositata presso il Comando Provinciale dei Vigili del Fuoco di Milano con pratica n. 65632.
+    
     4.2 Segnaletica e verifiche
     L’area di installazione sarà segnalata con idonea cartellonistica recante la dicitura:
     “Stazione di Ricarica per Veicoli Elettrici”
     Periodicamente, e a seguito di modifiche o ampliamenti, dovranno essere eseguite e documentate le verifiche previste dalla normativa vigente.
+    
     4.3 Attraversamenti REI
     In corrispondenza degli attraversamenti di compartimentazioni REI dovranno essere installati sistemi di sigillatura certificati, quali collari REI con materiale termoespandente, idonei per tubazioni in PVC, PE o PP.
+    
     5. Coordinamento con impianto di terra esistente
     Il sistema elettrico è di tipo TT.
     La protezione contro i contatti indiretti è garantita dalla relazione:
@@ -401,33 +407,42 @@ def genera_progetto_ev(
     dove:
     Id = corrente di intervento del differenziale in 5 s
     Rt = resistenza dell’impianto di terra
+    
     5.1 Dimensionamento impianto di terra
     L’impianto di terra è unico per tutto l’edificio ed è costituito da:
     dispersori a croce in acciaio zincato 50x50 mm, lunghezza 1,5 m;
     corda di rame da 50 mm² interrata a profondità ≥ 50 cm.
     Il collegamento al nuovo quadro BT avverrà mediante conduttore di terra dedicato su barra equipotenziale.
+    
     6. Criteri di dimensionamento adottati
+    
     6.1 Calcolo della corrente di impiego
     Circuiti terminali:
     Ib = Ku · P · 1000 / (c · V · cosφ)
+    
     6.2 Linee di distribuzione
     Ibf = Kc · ΣIb
+    
     6.3 Caduta di tensione
     ΔV = c · Ib · l · (r·cosφ + x·sinφ)
     ΔV% = (ΔV / Vn) · 100
+    
     6.4 Protezioni elettriche
     Condizioni verificate:
     Ib < In < Iz
     If < 1,45·Iz
     Ics ≥ Iccp
     I²t ≤ K²·S²
+    
     7. Allegati
-    Schemi unifilari
-    Calcoli elettrici (corrente, caduta di tensione, corto circuito)
-    Schede tecniche Wallbox
-    Certificazioni CE
+    
+    -Schemi unifilari
+    -Calcoli elettrici (corrente, caduta di tensione, corto circuito)
+    -Schede tecniche Wallbox
+    -Certificazioni CE
     ===============================================================
-
+    Calcoli elettrici (corrente, caduta di tensione, corto circuito)
+    
     DATI GENERALI
     Committente: {nome} {cognome}
     Ubicazione: {indirizzo}
