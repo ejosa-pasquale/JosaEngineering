@@ -10,7 +10,7 @@ INTERRUTTORI = [16, 20, 25, 32, 40, 50, 63, 80, 100, 125, 160]
 
 # Portate base Iz per FG16(O)R16 in condizioni standard (semplificate)
 PORTATA_BASE = {
-    "Interrata": {6: 34, 10: 46, 16: 61, 25: 80, 35: 99, 50: 119, 70: 151, 95: 182},
+    "Interrata": {6: 46, 10: 61, 16: 79, 25: 101, 35: 122, 50: 144, 70: 178, 95: 211},
     "A vista":   {6: 41, 10: 57, 16: 76, 25: 101, 35: 125, 50: 150, 70: 192, 95: 232},
 }
 
@@ -61,7 +61,7 @@ def genera_progetto_ev(
     # parametri progetto
     sistema: str = "TT",            # TT / TN-S / TN-C-S
     cosphi: float = 0.95,
-    temp_amb: int = 30,
+    temp_amb: int = 20,
     n_linee: int = 1,
     icc_ka: float = 6.0,
     # EV / 722
