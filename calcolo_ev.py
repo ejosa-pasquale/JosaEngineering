@@ -88,8 +88,6 @@ def genera_progetto_ev(
     nome: str,
     cognome: str,
     indirizzo: str,
-    cap: str = \"\",
-    citta: str = \"\",
     # dati elettrici
     potenza_kw: float,
     distanza_m: float,
@@ -484,7 +482,7 @@ def genera_progetto_ev(
     
     DATI GENERALI
     Committente: {nome} {cognome}
-    Ubicazione: {indirizzo} ({cap} {citta})
+    Ubicazione: {indirizzo}
     Sistema di distribuzione: {sistema}
     Alimentazione EVSE: {alimentazione}
     Modo di ricarica: {modo_ricarica}
@@ -550,12 +548,6 @@ def genera_progetto_ev(
     DATI PER SCHEMA UNIFILARE – LINEA EV
     ===================================
 
-    DATI ANAGRAFICI
-    ---------------
-    Intestatario: {nome} {cognome}
-    Indirizzo: {indirizzo}
-    CAP: {cap} – Città: {citta}
-
     QUADRO → LINEA DEDICATA EVSE → EVSE
 
     1) Protezione di linea:
@@ -588,13 +580,7 @@ def genera_progetto_ev(
     NOTE PLANIMETRIA – PERCORSO LINEA EV
     ===================================
 
-    DATI UBICAZIONE
-    ---------------
-    Intestatario: {nome} {cognome}
-    Indirizzo: {indirizzo}
-    CAP: {cap} – Città: {citta}
-
-    Ubicazione: {indirizzo} ({cap} {citta})
+    Ubicazione: {indirizzo}
     Linea dedicata dal quadro al punto EVSE.
     Lunghezza: {distanza_m:.1f} m
     Posa: {tipo_posa}
@@ -640,261 +626,3 @@ def _fattore_rho_terreno(rho_km_w: float | None) -> tuple[float, float]:
     """
     rho = 2.5 if rho_km_w is None else float(rho_km_w)
     return (_interp_dict(rho, FATT_RHO_TERRA), rho)
-
-# =========================
-# INTERFACCIA STREAMLIT
-# =========================
-if __name__ == "__main__":
-    try:
-        import streamlit as st
-    except Exception as e:
-        raise SystemExit("Per usare l'interfaccia grafica, installa streamlit e avvia con: streamlit run calcolo_ev-7_ui.py") from e
-
-    st.set_page_config(page_title="eV Field Service – Calcolo linea EV", layout="wide")
-
-    st.markdown("""
-    <style>
-    .ev-header {
-        background: linear-gradient(90deg, #4f46e5, #06b6d4);
-        padding: 1.1rem 1.2rem;
-        border-radius: 14px;
-        color: white;
-        margin-bottom: 1rem;
-    }
-    .ev-card {
-        background: #f9fafb;
-        border: 1px solid #e5e7eb;
-        border-radius: 14px;
-        padding: 1rem;
-        margin-bottom: 0.8rem;
-    }
-    .small-note { font-size: 0.9rem; opacity: 0.9; }
-    </style>
-    """, unsafe_allow_html=True)
-
-    st.markdown('<div class="ev-header"><h2>⚡ eV Field Service – Calcolo linea EV</h2><div class="small-note">Campi con info ℹ️, CAP e Città separati, UI migliorata.</div></div>', unsafe_allow_html=True)
-
-    with st.sidebar:
-        st.header("📋 Dati progetto")
-        st.caption("Suggerimento: compila dall’alto verso il basso. Ogni campo ha una nota ℹ️.")
-        tab = st.radio("Sezione", ["Anagrafica", "Dati elettrici", "Criteri", "EV / 722", "Differenziale", "Verifiche", "Risultati"])
-
-    # Defaults
-    if "alimentazione" not in st.session_state:
-        st.session_state["alimentazione"] = "Monofase 230V"
-    if "tipo_posa" not in st.session_state:
-        st.session_state["tipo_posa"] = "Interrata"
-
-    def info(label: str, help_text: str, **kwargs):
-        return st.__getattribute__(kwargs.pop("widget"))(label, help=help_text, **kwargs)
-
-    if tab == "Anagrafica":
-        st.subheader("🏷️ Anagrafica")
-        st.markdown('<div class="ev-card">', unsafe_allow_html=True)
-        c1, c2 = st.columns(2)
-        with c1:
-            nome = st.text_input("Nome", value="Mario", help="Nome del committente/intestatario (serve per i documenti).")
-            cognome = st.text_input("Cognome", value="Rossi", help="Cognome del committente/intestatario.")
-        with c2:
-            indirizzo = st.text_input("Indirizzo", value="", help="Via e numero civico dell’installazione.")
-            ccap, ccitta = st.columns([1,2])
-            with ccap:
-                cap = st.text_input("CAP", value="", help="Codice di Avviamento Postale (5 cifre).")
-            with ccitta:
-                citta = st.text_input("Città", value="", help="Comune dell’installazione (senza provincia).")
-        st.markdown('</div>', unsafe_allow_html=True)
-
-        st.info("Vai alle altre sezioni dalla sidebar. I dati vengono mantenuti in sessione.")
-
-        st.session_state.update(dict(nome=nome, cognome=cognome, indirizzo=indirizzo, cap=cap, citta=citta))
-
-    elif tab == "Dati elettrici":
-        st.subheader("🔌 Dati elettrici")
-        st.markdown('<div class="ev-card">', unsafe_allow_html=True)
-        c1, c2, c3 = st.columns(3)
-        with c1:
-            potenza_kw = st.number_input("Potenza EVSE (kW)", min_value=0.1, value=7.4, step=0.1,
-                                         help="Potenza nominale della wallbox/colonnina (kW).")
-        with c2:
-            distanza_m = st.number_input("Lunghezza linea (m)", min_value=1.0, value=20.0, step=1.0,
-                                         help="Distanza stimata dal quadro al punto di ricarica (metri).")
-        with c3:
-            alimentazione = st.selectbox("Alimentazione", ["Monofase 230V", "Trifase 400V"],
-                                         index=0 if st.session_state.get("alimentazione")=="Monofase 230V" else 1,
-                                         help="Seleziona monofase (230 V) o trifase (400 V).")
-        tipo_posa = st.selectbox("Tipo posa", ["Interrata", "A vista"],
-                                 index=0 if st.session_state.get("tipo_posa")=="Interrata" else 1,
-                                 help="Tipo posa usato per le portate Iz (semplificate).")
-        st.markdown('</div>', unsafe_allow_html=True)
-
-        st.session_state.update(dict(potenza_kw=potenza_kw, distanza_m=distanza_m,
-                                     alimentazione=alimentazione, tipo_posa=tipo_posa))
-
-    elif tab == "Criteri":
-        st.subheader("📐 Criteri di progetto")
-        st.markdown('<div class="ev-card">', unsafe_allow_html=True)
-        c1, c2, c3 = st.columns(3)
-        with c1:
-            sistema = st.selectbox("Sistema", ["TT", "TN-S", "TN-C-S"], index=0,
-                                   help="Sistema di distribuzione dell’impianto (influenza le verifiche).")
-        with c2:
-            cosphi = st.number_input("cosφ", min_value=0.50, max_value=1.00, value=0.95, step=0.01,
-                                     help="Fattore di potenza del carico (tipicamente 0,95).")
-        with c3:
-            icc_ka = st.number_input("Icc presunta (kA)", min_value=0.5, value=6.0, step=0.5,
-                                     help="Corrente presunta di cortocircuito al quadro (kA).")
-        c4, c5, c6 = st.columns(3)
-        with c4:
-            temp_amb = st.selectbox("Temperatura aria (°C)", [30,35,40,45,50], index=0,
-                                    help="Temperatura ambiente per derating posa a vista.")
-        with c5:
-            temp_terreno = st.selectbox("Temperatura terreno (°C) (solo interrata)", [None,20,25,30,35,40], index=0,
-                                        help="Se posa interrata, temperatura del terreno per derating.")
-        with c6:
-            rho_terreno_km_w = st.selectbox("ρ terreno (K·m/W) (solo interrata)", [None,2.5,3.0,4.0,5.0], index=0,
-                                            help="Resistività termica del terreno (riferimento tipico 2.5).")
-        n_linee = st.selectbox("N. linee raggruppate", [1,2,3], index=0,
-                               help="Numero di linee affiancate nello stesso percorso (derating).")
-        st.markdown('</div>', unsafe_allow_html=True)
-
-        st.session_state.update(dict(sistema=sistema, cosphi=cosphi, icc_ka=icc_ka, temp_amb=temp_amb,
-                                     temp_terreno=temp_terreno, rho_terreno_km_w=rho_terreno_km_w, n_linee=n_linee))
-
-    elif tab == "EV / 722":
-        st.subheader("🚗 EV / CEI 64-8 Sez. 722")
-        st.markdown('<div class="ev-card">', unsafe_allow_html=True)
-        c1, c2 = st.columns(2)
-        with c1:
-            modo_ricarica = st.selectbox("Modo ricarica", ["Modo 3", "Modo 2"], index=0,
-                                         help="Tipicamente Modo 3 per wallbox.")
-            tipo_punto = st.selectbox("Tipo punto", ["Connettore EV", "Presa a spina"], index=0,
-                                      help="Se il punto è connettore dedicato o presa.")
-            gestione_carichi = st.checkbox("Gestione carichi", value=False,
-                                           help="Se prevista gestione/dinamica del carico.")
-        with c2:
-            esterno = st.checkbox("Installazione esterna", value=False,
-                                  help="Se il punto è installato in esterno (influenza IP/IK).")
-            ip_rating = st.number_input("IP (solo esterno)", min_value=20, max_value=68, value=44, step=1,
-                                        help="Grado di protezione IP consigliato ≥44 in esterno.")
-            ik_rating = st.number_input("IK (solo esterno)", min_value=0, max_value=10, value=7, step=1,
-                                        help="Grado di protezione meccanica IK (valore tipico 7).")
-            altezza_presa_m = st.number_input("Altezza punto (m)", min_value=0.2, max_value=2.0, value=1.0, step=0.05,
-                                              help="Altezza consigliata 0,5–1,5 m.")
-        spd_previsto = st.checkbox("SPD previsto/valutato", value=True,
-                                   help="Se previsto o valutato SPD in base al rischio e al contesto.")
-        st.markdown('</div>', unsafe_allow_html=True)
-
-        st.session_state.update(dict(modo_ricarica=modo_ricarica, tipo_punto=tipo_punto, esterno=esterno,
-                                     ip_rating=ip_rating, ik_rating=ik_rating, altezza_presa_m=altezza_presa_m,
-                                     spd_previsto=spd_previsto, gestione_carichi=gestione_carichi))
-
-    elif tab == "Differenziale":
-        st.subheader("🧯 Protezione differenziale")
-        st.markdown('<div class="ev-card">', unsafe_allow_html=True)
-        rcd_tipo = st.selectbox("Tipo RCD", ["Tipo A + RDC-DD 6mA DC", "Tipo B", "Tipo F"], index=0,
-                                help="CEI 64-8/722: protezione adeguata alla componente DC.")
-        rcd_idn_ma = st.selectbox("IΔn (mA)", [30,100,300], index=0,
-                                  help="Sensibilità differenziale (tipicamente 30 mA per punto).")
-        evse_rdcdd_integrato = st.checkbox("RDC-DD 6mA DC integrato in EVSE", value=True,
-                                           help="Se la wallbox integra il dispositivo RDC-DD 6mA DC.")
-        st.markdown('</div>', unsafe_allow_html=True)
-
-        st.session_state.update(dict(rcd_tipo=rcd_tipo, rcd_idn_ma=rcd_idn_ma, evse_rdcdd_integrato=evse_rdcdd_integrato))
-
-    elif tab == "Verifiche":
-        st.subheader("✅ Verifiche (se dati disponibili)")
-        st.markdown('<div class="ev-card">', unsafe_allow_html=True)
-        c1, c2, c3 = st.columns(3)
-        with c1:
-            ra_ohm = st.number_input("Ra (Ω) – solo TT", min_value=0.0, value=0.0, step=1.0,
-                                     help="Resistenza di terra (se nota). Lascia 0 se non disponibile.")
-        with c2:
-            zs_ohm = st.number_input("Zs (Ω) – solo TN", min_value=0.0, value=0.0, step=0.01,
-                                     help="Impedenza anello di guasto (se nota). Lascia 0 se non disponibile.")
-        with c3:
-            t_intervento_s = st.number_input("Tempo intervento (s)", min_value=0.0, value=0.0, step=0.01,
-                                             help="Tempo intervento protezione per verifica I²t (se noto). Lascia 0 se non disponibile.")
-        ul_v = st.number_input("Ul (V)", min_value=25.0, value=50.0, step=1.0,
-                               help="Tensione limite di contatto (tipicamente 50 V).")
-        st.markdown('</div>', unsafe_allow_html=True)
-
-        st.session_state.update(dict(ra_ohm=None if ra_ohm==0 else ra_ohm,
-                                     zs_ohm=None if zs_ohm==0 else zs_ohm,
-                                     t_intervento_s=None if t_intervento_s==0 else t_intervento_s,
-                                     ul_v=ul_v))
-
-    elif tab == "Risultati":
-        st.subheader("📊 Risultati")
-        missing = [k for k in ["nome","cognome","indirizzo","potenza_kw","distanza_m","alimentazione","tipo_posa"] if k not in st.session_state]
-        if missing:
-            st.warning("Compila prima: " + ", ".join(missing))
-        else:
-            # Collect all args with defaults if not set
-            args = dict(
-                nome=st.session_state.get("nome",""),
-                cognome=st.session_state.get("cognome",""),
-                indirizzo=st.session_state.get("indirizzo",""),
-                cap=st.session_state.get("cap",""),
-                citta=st.session_state.get("citta",""),
-                potenza_kw=st.session_state.get("potenza_kw",7.4),
-                distanza_m=st.session_state.get("distanza_m",20.0),
-                alimentazione=st.session_state.get("alimentazione","Monofase 230V"),
-                tipo_posa=st.session_state.get("tipo_posa","Interrata"),
-                sistema=st.session_state.get("sistema","TT"),
-                cosphi=st.session_state.get("cosphi",0.95),
-                temp_amb=st.session_state.get("temp_amb",30),
-                temp_terreno=st.session_state.get("temp_terreno",None),
-                rho_terreno_km_w=st.session_state.get("rho_terreno_km_w",None),
-                n_linee=st.session_state.get("n_linee",1),
-                icc_ka=st.session_state.get("icc_ka",6.0),
-                modo_ricarica=st.session_state.get("modo_ricarica","Modo 3"),
-                tipo_punto=st.session_state.get("tipo_punto","Connettore EV"),
-                esterno=st.session_state.get("esterno",False),
-                ip_rating=int(st.session_state.get("ip_rating",44)),
-                ik_rating=int(st.session_state.get("ik_rating",7)),
-                altezza_presa_m=float(st.session_state.get("altezza_presa_m",1.0)),
-                spd_previsto=st.session_state.get("spd_previsto",True),
-                gestione_carichi=st.session_state.get("gestione_carichi",False),
-                rcd_tipo=st.session_state.get("rcd_tipo","Tipo A + RDC-DD 6mA DC"),
-                rcd_idn_ma=int(st.session_state.get("rcd_idn_ma",30)),
-                evse_rdcdd_integrato=st.session_state.get("evse_rdcdd_integrato",True),
-                ra_ohm=st.session_state.get("ra_ohm",None),
-                ul_v=float(st.session_state.get("ul_v",50.0)),
-                zs_ohm=st.session_state.get("zs_ohm",None),
-                t_intervento_s=st.session_state.get("t_intervento_s",None),
-            )
-            out = genera_progetto_ev(**args)
-
-            k1, k2, k3, k4 = st.columns(4)
-            k1.metric("Ib (A)", f"{out['Ib_a']}")
-            k2.metric("In (A)", f"{out['In_a']}")
-            k3.metric("Iz corr (A)", f"{out['Iz_a']}")
-            k4.metric("Sezione (mm²)", f"{out['sezione_mm2']}")
-
-            st.markdown('<div class="ev-card">', unsafe_allow_html=True)
-            st.write("**Esiti principali**")
-            cols = st.columns(2)
-            with cols[0]:
-                st.success("CEI 64-8/722: OK" if out["ok_722"] else "CEI 64-8/722: verifica con note")
-                if out["warning_722"]:
-                    st.warning("\n".join(out["warning_722"]))
-                if out["nonconf_722"]:
-                    st.error("\n".join(out["nonconf_722"]))
-            with cols[1]:
-                st.success("CEI 64-8/4-41: OK" if out["ok_441"] else "CEI 64-8/4-41: verifica con note")
-                if out["warning_441"]:
-                    st.warning("\n".join(out["warning_441"]))
-                if out["nonconf_441"]:
-                    st.error("\n".join(out["nonconf_441"]))
-            st.markdown('</div>', unsafe_allow_html=True)
-
-            t1, t2, t3 = st.tabs(["📄 Relazione", "🔧 Unifilare", "🗺️ Planimetria"])
-            with t1:
-                st.text_area("Relazione", out["relazione"], height=360)
-                st.download_button("⬇️ Scarica relazione (TXT)", out["relazione"], "relazione_ev.txt", "text/plain")
-            with t2:
-                st.text_area("Unifilare", out["unifilare"], height=360)
-                st.download_button("⬇️ Scarica unifilare (TXT)", out["unifilare"], "unifilare_ev.txt", "text/plain")
-            with t3:
-                st.text_area("Planimetria", out["planimetria"], height=360)
-                st.download_button("⬇️ Scarica planimetria (TXT)", out["planimetria"], "planimetria_ev.txt", "text/plain")
