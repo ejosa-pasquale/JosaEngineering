@@ -119,7 +119,11 @@ def genera_progetto_ev(
     ul_v: float = 50.0,                  # tensione limite ordinaria
     zs_ohm: float | None = None,         # impedenza anello guasto (TN) se disponibile
     # verifica termica I²t (facoltativa)
-    t_intervento_s: float | None = None  # tempo intervento protezione (s) se disponibile
+    t_intervento_s: float | None = None,  # tempo intervento protezione (s) se disponibile
+    # output avanzato
+    include_assunzioni_formule: bool = True,
+    salva_output_path: str | None = None,    # se valorizzato, salva la RELAZIONE completa su file
+    salva_appendice_path: str | None = None  # se valorizzato, salva solo appendice su file
 ):
     """
     Pre-dimensionamento + relazione tecnica con:
@@ -382,6 +386,103 @@ def genera_progetto_ev(
             f"- Sezione minima teorica Smin≈{smin_i2t:.1f} mm² (verificare con Icc reale a fine linea e curva del dispositivo)."
         )
 
+
+    # ---------------------------
+    # APPENDICE: Assunzioni e formule (per tracciabilità)
+    # ---------------------------
+    appendice = dedent(f"""
+    APPENDICE – ASSUNZIONI E FORMULE UTILIZZATE
+    ==========================================
+
+    NOTE DI AMBITO
+    - Questo documento è un *pre-dimensionamento*: tabelle di portata e fattori correttivi sono **semplificati** e servono
+      a fornire una stima prudenziale. Per il progetto esecutivo usare tabelle CEI/IEC complete e dati reali di posa.
+    - Cavo assunto: FG16(O)R16 (rame) – portate base in PORTATA_BASE.
+    - Criterio caduta di tensione: ΔV_max = 4% · U_n (scelta tipica per linee terminali dedicate).
+
+    GRANDEZZE DI INGRESSO (valori usati nel calcolo)
+    - U_n = {tensione} V
+    - P = {potenza_kw:.2f} kW
+    - cosφ = {cosphi:.3f}
+    - L = {distanza_m:.1f} m
+    - Posa = {tipo_posa}
+    - n_linee (raggruppamento) = {n_linee}
+    - Temperatura ambiente = {temp_amb} °C
+    - Temperatura terreno = {('n/d' if temp_terreno is None else str(temp_terreno) + ' °C')}
+    - ρ terreno = {('2.5 (default)' if rho_terreno_km_w is None else f'{rho_terreno_km_w:.1f}')} K·m/W
+    - Icc presunta = {icc_ka:.1f} kA
+    - IΔn = {rcd_idn_ma} mA
+    - Sistema = {sistema}
+
+    1) CORRENTE DI IMPIEGO Ib
+    - Monofase:  Ib = P / (U · cosφ)
+    - Trifase:   Ib = P / (√3 · U · cosφ)
+    Valore calcolato: Ib = {Ib:.2f} A
+
+    2) SCELTA INTERRUTTORE In (tabella taglie discrete)
+    - In = prima taglia in INTERRUTTORI tale che In ≥ Ib
+    Valore selezionato: In = {In} A
+
+    3) SEZIONE PER CADUTA DI TENSIONE (modello resistivo semplificato, rame)
+    - Conducibilità assunta rame: γ = {cond_rame} (m/(Ω·mm²))  [approssimazione pratica]
+    - ΔV_max = 0.04 · U_n = {dv_max:.1f} V
+
+    - Monofase:  S_min = (2 · L · Ib · cosφ) / (γ · ΔV_max)
+    - Trifase:   S_min = (√3 · L · Ib · cosφ) / (γ · ΔV_max)
+
+    Valore calcolato: S_min(ΔV) = {S_cad:.2f} mm²
+
+    4) PORTATA Iz E DERATING (Ib ≤ In ≤ Iz)
+    - Iz_base = PORTATA_BASE[posa][S]
+    - k_temp da tabella (aria o terreno) con interpolazione lineare
+    - k_ρ (solo interrata) da tabella resistività con interpolazione lineare
+    - k_ragg da tabella raggruppamento (n_linee)
+
+    Formula: Iz_corr = Iz_base · k_temp · k_ρ · k_ragg
+
+    Valori usati:
+    - k_temp = {k_temp:.2f} (T riferimento usata = {T_usata} °C)
+    - k_ρ    = {k_rho:.2f} (ρ usata = {rho_usata:.1f} K·m/W)
+    - k_ragg = {k_ragg:.2f}
+    - Sezione scelta: S = {sezione} mm²
+    - Iz_base(S) = {Iz_base_sel} A
+    - Iz_corr(S) = {Iz_corr:.1f} A
+    - Verifica: Ib ≤ In ≤ Iz  →  {"OK" if (Ib <= In <= Iz_corr) else "NON OK"}
+
+    5) CONDUTTORE DI PROTEZIONE PE (CEI 64-8/5-54 – criterio semplificato tipo 543.1.2, rame)
+    - Se S_fase ≤ 16 → S_PE = S_fase
+    - Se 16 < S_fase ≤ 35 → S_PE = 16
+    - Se S_fase > 35 → S_PE = S_fase/2 (arrotondato per eccesso)
+    Valore: S_PE = {sezione_pe} mm²
+
+    6) CONTATTI INDIRETTI (4-41 – approccio semplificato)
+    - TT: condizione (se disponibile Ra):  Ra · IΔn ≤ U_L
+      dove U_L = {ul_v:.1f} V.
+    - TN: richiede verifica con Zs e tempi d'intervento (se disponibili).
+
+    7) VERIFICA TERMICA CORTOCIRCUITO I²t (facoltativa)
+    - S_min = I · √t / k
+      con k = {K_CU_XLPE} A·√s/mm² (rame, isol. XLPE/EPR ~90°C), I = Icc [A], t = tempo intervento [s]
+    {('Valore calcolato: S_min(I²t) = ' + str(round(smin_i2t,1)) + ' mm²' if smin_i2t is not None else 'Non calcolata: serve t_intervento_s.')}
+
+    OUTPUT/SALVATAGGIO
+    - La RELAZIONE include questa appendice se include_assunzioni_formule=True.
+    - Se salva_output_path è valorizzato, la RELAZIONE completa viene salvata su file.
+    - Se salva_appendice_path è valorizzato, viene salvata solo questa appendice.
+    """).strip()
+
+    # Integra appendice in relazione (se richiesto)
+    if include_assunzioni_formule:
+        relazione = relazione + "\n\n" + appendice
+
+    # Salvataggio su file (opzionale)
+    if salva_output_path:
+        with open(salva_output_path, "w", encoding="utf-8") as f:
+            f.write(relazione + "\n")
+    if salva_appendice_path:
+        with open(salva_appendice_path, "w", encoding="utf-8") as f:
+            f.write(appendice + "\n")
+
     relazione = dedent(f"""
     RELAZIONE TECNICA – INFRASTRUTTURA DI RICARICA VEICOLI ELETTRICI - Software eV Field Service 
     
@@ -607,6 +708,7 @@ def genera_progetto_ev(
         "Smin_i2t_mm2": round(smin_i2t, 1) if smin_i2t is not None else None,
         # testi
         "relazione": relazione,
+        "appendice_assunzioni_formule": appendice,
         "unifilare": unifilare,
         "planimetria": planimetria,
         # 722
