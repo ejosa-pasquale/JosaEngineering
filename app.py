@@ -5,8 +5,8 @@ from documenti_ev import genera_pdf_unico_bytes
 
 st.set_page_config(page_title="Progetto EV – CEI 64-8/722", page_icon="⚡", layout="wide")
 
-st.title("⚡ Progetto linea EV – CEI 64-8 ")
-st.caption("Progetto Elettrico - Infrastruttura di Ricarica eVFs ")
+st.title("⚡Progettazione Ricarica Veicoli Elettrici (EV) – CEI 64-8 Sez. 722 ⚡")
+st.caption(" Calcolo, verifica sezione linea, protezioni e relazione tecnica per EVs by eV Field Service")
 
 st.divider()
 
