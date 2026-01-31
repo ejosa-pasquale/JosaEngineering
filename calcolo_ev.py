@@ -423,13 +423,11 @@ def genera_progetto_ev(
     4. Sicurezza elettrica delle colonnine di ricarica
     In riferimento alla Circolare del Ministero dell’Interno del 05 novembre 2018 n. 2, le infrastrutture di ricarica per veicoli elettrici non rientrano tra le attività soggette ai controlli di prevenzione incendi ai sensi del D.P.R. 151/2011, ma la loro installazione costituisce modifica all’attività esistente.
     L’impianto oggetto del presente documento sarà conforme alla suddetta Circolare.
-    L’infrastruttura proposta consiste in una colonnina di ricarica AC da 22 kW, conforme alle norme CEI e predisposta per la ricarica in Modo 3.
     La stazione di ricarica: è conforme alle Norme CEI 64-8, Sezione 722; è conforme alle norme CEI EN 61851 e CEI EN 62196; è collegata ai dispositivi di sgancio generale dell’edificio.
    
     4.1 Dispositivo di sgancio di emergenza
-    La Wallbox è collegata a un dispositivo di sgancio elettrico di emergenza dedicato, installato in autorimessa in prossimità del pulsante di sgancio generale esistente.
+    La Wallbox deve esser collegata a un dispositivo di sgancio elettrico di emergenza dedicato, installato in autorimessa in prossimità del pulsante di sgancio generale esistente.
     In caso di emergenza, l’azionamento del pulsante provoca il sezionamento dell’alimentazione elettrica della colonnina.
-    L’attività è soggetta a prevenzione incendi e risulta depositata presso il Comando Provinciale dei Vigili del Fuoco di Milano con pratica n. 65632.
     
     4.2 Segnaletica e verifiche
     L’area di installazione sarà segnalata con idonea cartellonistica recante la dicitura:
