@@ -1,6 +1,8 @@
 import math
 from textwrap import dedent
 
+BULLET_JOIN = "\n- "
+
 # =========================
 # TABELLE (SEMPLIFICATE)
 # =========================
@@ -10,22 +12,55 @@ INTERRUTTORI = [16, 20, 25, 32, 40, 50, 63, 80, 100, 125, 160]
 
 # Portate base Iz per FG16(O)R16 in condizioni standard (semplificate)
 PORTATA_BASE = {
-    "Interrata": {6: 46, 10: 61, 16: 79, 25: 101, 35: 122, 50: 144, 70: 178, 95: 211},
+    "Interrata": {6: 34, 10: 46, 16: 61, 25: 80, 35: 99, 50: 119, 70: 151, 95: 182},
     "A vista":   {6: 41, 10: 57, 16: 76, 25: 101, 35: 125, 50: 150, 70: 192, 95: 232},
 }
 
 # Fattori correttivi (semplificati)
-FATT_TEMP = {30: 1.00, 35: 0.94, 40: 0.87, 45: 0.79, 50: 0.71}
+FATT_TEMP_ARIA = {30: 1.00, 35: 0.94, 40: 0.87, 45: 0.79, 50: 0.71}
+# Per posa interrata la condizione di riferimento tipica nelle tabelle IEC/CEI è T_terreno=20°C.
+# Valori qui sotto: semplificazione prudente ma non eccessiva (da usare con consapevolezza).
+FATT_TEMP_TERRA = {20: 1.00, 25: 0.96, 30: 0.92, 35: 0.88, 40: 0.84}
+
+# Fattore per resistività termica del terreno ρ [K·m/W] (riferimento tipico 2.5).
+# Se ρ aumenta (terreno più "isolante"), la portata si riduce.
+FATT_RHO_TERRA = {2.5: 1.00, 3.0: 0.96, 4.0: 0.90, 5.0: 0.86}
 FATT_RAGGR = {1: 1.00, 2: 0.80, 3: 0.70}
 
 # Coefficiente k per verifica termica I²t (rame, XLPE/EPR ~ 90°C) - valore tipico
 K_CU_XLPE = 143  # A·sqrt(s)/mm² (valore tipico usato in pratica)
 
 
-def _fattore_temp(temp_amb: int) -> float:
-    keys = sorted(FATT_TEMP.keys())
-    sel = max([t for t in keys if t <= temp_amb], default=50)
-    return FATT_TEMP.get(sel, 0.71)
+def _interp_dict(x: float, tab: dict) -> float:
+    """Interpolazione lineare su una tabella {x: y} con x crescente."""
+    xs = sorted(tab.keys())
+    if x <= xs[0]:
+        return tab[xs[0]]
+    if x >= xs[-1]:
+        return tab[xs[-1]]
+    for i in range(len(xs) - 1):
+        x0, x1 = xs[i], xs[i + 1]
+        if x0 <= x <= x1:
+            y0, y1 = tab[x0], tab[x1]
+            return y0 if x1 == x0 else y0 + (y1 - y0) * (x - x0) / (x1 - x0)
+    return tab[xs[-1]]
+
+
+def _fattore_temp(tipo_posa: str, temp_aria: int, temp_terreno: int | None) -> tuple[float, int]:
+    """
+    Restituisce (k_temp, T_usata).
+
+    - "A vista": tabella aria (riferimento 30°C).
+    - "Interrata": tabella terreno (riferimento 20°C). Se non specifichi temp_terreno,
+      NON viene applicata automaticamente la temperatura aria al cavo interrato.
+
+    Nota: fattori semplificati. Per casi critici usare tabelle CEI/IEC complete.
+    """
+    if tipo_posa == "Interrata":
+        T = 20 if temp_terreno is None else int(temp_terreno)
+        return (_interp_dict(float(T), FATT_TEMP_TERRA), T)
+    T = int(temp_aria)
+    return (_interp_dict(float(T), FATT_TEMP_ARIA), T)
 
 
 def _fattore_raggr(n_linee: int) -> float:
@@ -61,7 +96,9 @@ def genera_progetto_ev(
     # parametri progetto
     sistema: str = "TT",            # TT / TN-S / TN-C-S
     cosphi: float = 0.95,
-    temp_amb: int = 20,
+    temp_amb: int = 30,
+    temp_terreno: int | None = None,
+    rho_terreno_km_w: float | None = None,
     n_linee: int = 1,
     icc_ka: float = 6.0,
     # EV / 722
@@ -142,8 +179,10 @@ def genera_progetto_ev(
     # ---------------------------
     # Iz con derating
     # ---------------------------
-    k_temp = _fattore_temp(temp_amb)
+    k_temp, T_usata = _fattore_temp(tipo_posa, temp_amb, temp_terreno)
+    k_rho, rho_usata = _fattore_rho_terreno(rho_terreno_km_w) if tipo_posa == "Interrata" else (1.0, 2.5)
     k_ragg = _fattore_raggr(n_linee)
+    note_rho = (f"• Resistività terreno ρ={rho_usata:.1f} K·m/W → kρ={k_rho:.2f}\n      " if tipo_posa == "Interrata" else "")
 
     sezione = None
     Iz_corr = None
@@ -155,7 +194,7 @@ def genera_progetto_ev(
         Iz_base = PORTATA_BASE[tipo_posa].get(S)
         if not Iz_base:
             continue
-        Iz = Iz_base * k_temp * k_ragg
+        Iz = Iz_base * k_temp * k_rho * k_ragg
         if Ib <= In <= Iz:
             sezione = S
             Iz_corr = Iz
@@ -327,11 +366,11 @@ def genera_progetto_ev(
     blocco_441 = dedent(f"""
     VERIFICA PROTEZIONE CONTRO CONTATTI INDIRETTI (CEI 64-8/4-41)
     Esiti OK:
-    {("- " + "\\n- ".join(esito_441["ok"])) if esito_441["ok"] else "- (nessuno)"}
+    {("- " + BULLET_JOIN.join(esito_441["ok"])) if esito_441["ok"] else "- (nessuno)"}
     Warning:
-    {("- " + "\\n- ".join(esito_441["warning"])) if esito_441["warning"] else "- (nessuno)"}
+    {("- " + BULLET_JOIN.join(esito_441["warning"])) if esito_441["warning"] else "- (nessuno)"}
     Non conformità:
-    {("- " + "\\n- ".join(esito_441["nonconf"])) if esito_441["nonconf"] else "- (nessuna)"}
+    {("- " + BULLET_JOIN.join(esito_441["nonconf"])) if esito_441["nonconf"] else "- (nessuna)"}
     """).strip()
 
     # I²t blocco
@@ -462,8 +501,8 @@ def genera_progetto_ev(
     - Caduta di tensione di progetto: ΔV ≤ 4% (CEI 64-8 §525).
     - Verifica sovraccarico: Ib ≤ In ≤ Iz (CEI 64-8 §433).
     - Portate cavo: condizioni standard con fattori correttivi:
-      • Temperatura {temp_amb} °C → kT={k_temp:.2f}
-      • Raggruppamento n={n_linee} → kG={k_ragg:.2f}
+      • Temperatura {T_usata} °C ({'terreno' if tipo_posa=='Interrata' else 'aria'}) → kT={k_temp:.2f}
+      {note_rho}• Raggruppamento n={n_linee} → kG={k_ragg:.2f}
     - Cavo: FG16(O)R16 0,6/1 kV (rame).
 
     DIMENSIONAMENTO LINEA
@@ -490,13 +529,13 @@ def genera_progetto_ev(
 
     PRESCRIZIONI CEI 64-8/7 – SEZIONE 722 (CHECK-LIST)
     Esiti OK:
-    {("- " + "\\n- ".join(ok_722)) if ok_722 else "- (nessuno)"}
+    {("- " + BULLET_JOIN.join(ok_722)) if ok_722 else "- (nessuno)"}
 
     Warning:
-    {("- " + "\\n- ".join(warning_722)) if warning_722 else "- (nessuno)"}
+    {("- " + BULLET_JOIN.join(warning_722)) if warning_722 else "- (nessuno)"}
 
     Non conformità:
-    {("- " + "\\n- ".join(nonconf_722)) if nonconf_722 else "- (nessuna)"}
+    {("- " + BULLET_JOIN.join(nonconf_722)) if nonconf_722 else "- (nessuna)"}
 
     {nota_presa_dom if nota_presa_dom else ""}
 
@@ -581,3 +620,12 @@ def genera_progetto_ev(
         "warning_441": esito_441["warning"],
         "nonconf_441": esito_441["nonconf"],
     }
+
+def _fattore_rho_terreno(rho_km_w: float | None) -> tuple[float, float]:
+    """
+    Restituisce (k_rho, rho_usata). Riferimento tipico ρ=2.5 K·m/W.
+    Se rho_km_w è None, assume 2.5 (nessun derating).
+    """
+    rho = 2.5 if rho_km_w is None else float(rho_km_w)
+    return (_interp_dict(rho, FATT_RHO_TERRA), rho)
+
