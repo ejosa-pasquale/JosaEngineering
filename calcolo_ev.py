@@ -426,8 +426,8 @@ def genera_progetto_ev(
     La stazione di ricarica: è conforme alle Norme CEI 64-8, Sezione 722; è conforme alle norme CEI EN 61851 e CEI EN 62196; è collegata ai dispositivi di sgancio generale dell’edificio.
    
     4.1 Dispositivo di sgancio di emergenza
-    La Wallbox deve esser collegata a un dispositivo di sgancio elettrico di emergenza dedicato, installato in autorimessa in prossimità del pulsante di sgancio generale esistente.
-    In caso di emergenza, l’azionamento del pulsante provoca il sezionamento dell’alimentazione elettrica della colonnina.
+    La Wallbox deve esser collegata a un dispositivo di sgancio elettrico di emergenza, installato in autorimessa o in prossimità del pulsante di sgancio generale esistente.
+    In caso di emergenza, l’azionamento del pulsante provoca il sezionamento dell’alimentazione elettrica della colonnina. In caso di installazione in luoghi con Certificato prevenzioni Incendi aggungere la bobina di sgancio e quindi alle note dell'unifilare.
     
     4.2 Segnaletica e verifiche
     L’area di installazione sarà segnalata con idonea cartellonistica recante la dicitura:
@@ -541,7 +541,7 @@ def genera_progetto_ev(
 
     NOTE FINALI
     Le verifiche costituiscono pre-dimensionamento coerente con CEI 64-8. La scelta finale dei dispositivi e la conformità
-    devono essere confermate con dati reali e prove strumentali di cui alla CEI 64-8/6. Valido solo se firmato
+    devono essere confermate con dati reali e prove strumentali di cui alla CEI 64-8/6. Il progetto è Valido solo se verificato e firmato da un tecnico iscritto all'albo. 
     """).strip()
 
     unifilare = dedent(f"""
