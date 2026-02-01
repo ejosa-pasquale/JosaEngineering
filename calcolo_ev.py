@@ -426,8 +426,8 @@ def genera_progetto_ev(
     La stazione di ricarica: è conforme alle Norme CEI 64-8, Sezione 722; è conforme alle norme CEI EN 61851 e CEI EN 62196; è collegata ai dispositivi di sgancio generale dell’edificio.
    
     4.1 Dispositivo di sgancio di emergenza
-    La Wallbox deve esser collegata a un dispositivo di sgancio elettrico di emergenza, installato in autorimessa o in prossimità del pulsante di sgancio generale esistente.
-    In caso di emergenza, l’azionamento del pulsante provoca il sezionamento dell’alimentazione elettrica della colonnina. In caso di installazione in luoghi con Certificato prevenzioni Incendi aggungere la bobina di sgancio e quindi alle note dell'unifilare.
+    La Wallbox deve esser collegata a un dispositivo di sgancio elettrico di emergenza dedicato, installato in autorimessa in prossimità del pulsante di sgancio generale esistente.
+    In caso di emergenza, l’azionamento del pulsante provoca il sezionamento dell’alimentazione elettrica della colonnina.
     
     4.2 Segnaletica e verifiche
     L’area di installazione sarà segnalata con idonea cartellonistica recante la dicitura:
@@ -541,7 +541,7 @@ def genera_progetto_ev(
 
     NOTE FINALI
     Le verifiche costituiscono pre-dimensionamento coerente con CEI 64-8. La scelta finale dei dispositivi e la conformità
-    devono essere confermate con dati reali e prove strumentali di cui alla CEI 64-8/6. Il progetto è Valido solo se verificato e firmato da un tecnico iscritto all'albo. 
+    devono essere confermate con dati reali e prove strumentali di cui alla CEI 64-8/6. Valido solo se firmato
     """).strip()
 
     unifilare = dedent(f"""
@@ -618,6 +618,226 @@ def genera_progetto_ev(
         "warning_441": esito_441["warning"],
         "nonconf_441": esito_441["nonconf"],
     }
+
+
+def genera_progetto_ev_multi(
+    # anagrafica
+    nome: str,
+    cognome: str,
+    indirizzo: str,
+    # colonnine
+    n_colonnine: int,
+    architettura: str,
+    potenza_kw: float,
+    # distanze
+    distanza_dorsale_m: float,
+    distanza_linea_m: float,
+    alimentazione: str,
+    tipo_posa: str,
+    # parametri progetto (pass-through)
+    sistema: str = "TT",
+    cosphi: float = 0.95,
+    temp_amb: int = 30,
+    temp_terreno: int | None = None,
+    rho_terreno_km_w: float | None = None,
+    n_linee: int = 1,  # compat: mantiene ma verrà sovrascritto internamente
+    icc_ka: float = 6.0,
+    modo_ricarica: str = "Modo 3",
+    tipo_punto: str = "Connettore EV",
+    esterno: bool = False,
+    ip_rating: int = 44,
+    ik_rating: int = 7,
+    altezza_presa_m: float = 1.0,
+    spd_previsto: bool = True,
+    gestione_carichi: bool = False,
+    rcd_tipo: str = "Tipo A + RDC-DD 6mA DC",
+    rcd_idn_ma: int = 30,
+    evse_rdcdd_integrato: bool = True,
+    ra_ohm: float | None = None,
+    ul_v: float = 50.0,
+    zs_ohm: float | None = None,
+    t_intervento_s: float | None = None,
+):
+    """
+    Estensione per più colonnine (fino a 5) con due architetture:
+
+    A) 'Dorsale unica + sottoquadro in prossimità':
+       - Una dorsale (quadro principale -> sottoquadro in prossimità colonnine) di lunghezza distanza_dorsale_m.
+       - Dal sottoquadro partono n_colonnine linee dedicate, ciascuna di lunghezza distanza_linea_m (tipicamente breve).
+
+    B) 'Sottoquadro con linee uniche':
+       - Sottoquadro vicino al quadro principale (dorsale tipicamente breve, comunque parametrizzata da distanza_dorsale_m).
+       - Dal sottoquadro partono n_colonnine linee dedicate, ciascuna di lunghezza distanza_linea_m (tipicamente lunga).
+
+    Nota: per semplicità progettuale (pre-dimensionamento) la dorsale è calcolata a potenza totale
+    (somma delle potenze), senza fattori di contemporaneità. Se è presente gestione carichi a monte,
+    è possibile riparametrizzare potenza_kw e/o introdurre un fattore esterno.
+    """
+    if n_colonnine < 1 or n_colonnine > 5:
+        raise ValueError("Numero colonnine ammesso: 1..5")
+    if distanza_dorsale_m <= 0 or distanza_linea_m <= 0:
+        raise ValueError("Le distanze devono essere > 0.")
+    arch = (architettura or "").strip()
+
+    # Normalizza stringhe architettura per robustezza
+    arch_key = arch.lower()
+    if "dorsale" in arch_key and "prossimit" in arch_key:
+        arch_norm = "Dorsale unica + sottoquadro in prossimità"
+    elif "linee" in arch_key and "uniche" in arch_key:
+        arch_norm = "Sottoquadro con linee uniche"
+    else:
+        # lascia passare valori custom ma segnala nelle note
+        arch_norm = arch if arch else "Architettura non specificata"
+
+    # ---------------------------
+    # Calcolo dorsale (quadro principale -> sottoquadro)
+    # ---------------------------
+    potenza_dorsale_kw = float(potenza_kw) * int(n_colonnine)
+
+    dorsale = genera_progetto_ev(
+        nome=nome,
+        cognome=cognome,
+        indirizzo=indirizzo,
+        potenza_kw=potenza_dorsale_kw,
+        distanza_m=float(distanza_dorsale_m),
+        alimentazione=alimentazione,
+        tipo_posa=tipo_posa,
+        sistema=sistema,
+        cosphi=cosphi,
+        temp_amb=temp_amb,
+        temp_terreno=temp_terreno,
+        rho_terreno_km_w=rho_terreno_km_w,
+        n_linee=1,
+        icc_ka=icc_ka,
+        modo_ricarica=modo_ricarica,
+        tipo_punto=tipo_punto,
+        esterno=esterno,
+        ip_rating=ip_rating,
+        ik_rating=ik_rating,
+        altezza_presa_m=altezza_presa_m,
+        spd_previsto=spd_previsto,
+        gestione_carichi=gestione_carichi,
+        rcd_tipo=rcd_tipo,
+        rcd_idn_ma=rcd_idn_ma,
+        evse_rdcdd_integrato=evse_rdcdd_integrato,
+        ra_ohm=ra_ohm,
+        ul_v=ul_v,
+        zs_ohm=zs_ohm,
+        t_intervento_s=t_intervento_s,
+    )
+
+    # ---------------------------
+    # Calcolo linee colonnine (sottoquadro -> singola EVSE)
+    # - n_linee impostato a n_colonnine per derating da raggruppamento
+    # ---------------------------
+    linee = []
+    for i in range(1, int(n_colonnine) + 1):
+        r = genera_progetto_ev(
+            nome=nome,
+            cognome=cognome,
+            indirizzo=indirizzo,
+            potenza_kw=float(potenza_kw),
+            distanza_m=float(distanza_linea_m),
+            alimentazione=alimentazione,
+            tipo_posa=tipo_posa,
+            sistema=sistema,
+            cosphi=cosphi,
+            temp_amb=temp_amb,
+            temp_terreno=temp_terreno,
+            rho_terreno_km_w=rho_terreno_km_w,
+            n_linee=int(n_colonnine),
+            icc_ka=icc_ka,
+            modo_ricarica=modo_ricarica,
+            tipo_punto=tipo_punto,
+            esterno=esterno,
+            ip_rating=ip_rating,
+            ik_rating=ik_rating,
+            altezza_presa_m=altezza_presa_m,
+            spd_previsto=spd_previsto,
+            gestione_carichi=gestione_carichi,
+            rcd_tipo=rcd_tipo,
+            rcd_idn_ma=rcd_idn_ma,
+            evse_rdcdd_integrato=evse_rdcdd_integrato,
+            ra_ohm=ra_ohm,
+            ul_v=ul_v,
+            zs_ohm=zs_ohm,
+            t_intervento_s=t_intervento_s,
+        )
+        r["colonnina_idx"] = i
+        linee.append(r)
+
+    # ---------------------------
+    # Merge checklist (unione, dedup)
+    # ---------------------------
+    def _uniq(seq):
+        seen = set()
+        out = []
+        for x in seq:
+            if x not in seen:
+                seen.add(x)
+                out.append(x)
+        return out
+
+    ok_722 = _uniq(list(dorsale.get("ok_722", [])) + [x for rr in linee for x in rr.get("ok_722", [])])
+    warning_722 = _uniq(list(dorsale.get("warning_722", [])) + [x for rr in linee for x in rr.get("warning_722", [])])
+    nonconf_722 = _uniq(list(dorsale.get("nonconf_722", [])) + [x for rr in linee for x in rr.get("nonconf_722", [])])
+
+    ok_441 = all([bool(dorsale.get("ok_441", False))] + [bool(rr.get("ok_441", False)) for rr in linee])
+
+    # ---------------------------
+    # Testi combinati (relazione/unifilare/planimetria) per PDF unico
+    # ---------------------------
+    header = dedent(f"""
+    PROGETTO MULTI-COLONNINA
+    =======================
+    Architettura: {arch_norm}
+    Numero colonnine: {n_colonnine}
+    Potenza per colonnina: {potenza_kw:.1f} kW
+    Potenza totale (dorsale): {potenza_dorsale_kw:.1f} kW
+
+    Distanza dorsale (quadro principale -> sottoquadro): {distanza_dorsale_m:.1f} m
+    Distanza linee (sottoquadro -> colonnina): {distanza_linea_m:.1f} m
+    """).strip()
+
+    relazione = header + "\n\n" + dedent("""
+    NOTE DI ARCHITETTURA
+    --------------------
+    - La dorsale alimenta un sottoquadro dedicato EV (con protezioni e SPD dove necessario).
+    - Ogni colonnina è servita da una linea dedicata dal sottoquadro, con protezione magnetotermica e differenziale.
+    - Il raggruppamento di più linee è considerato nel derating tramite n_linee = n_colonnine (fattore k_ragg).
+    """).strip()
+
+    relazione += "\n\n" + "=== DORSALE (QUADRO PRINCIPALE -> SOTTOQUADRO EV) ===\n" + dorsale.get("relazione", "")
+    for rr in linee:
+        relazione += "\n\n" + f"=== LINEA COLONNINA {rr['colonnina_idx']} (SOTTOQUADRO -> EVSE) ===\n" + rr.get("relazione", "")
+
+    unifilare = header + "\n\n" + "=== SCHEMA DORSALE ===\n" + dorsale.get("unifilare", "")
+    for rr in linee:
+        unifilare += "\n\n" + f"=== SCHEMA LINEA COLONNINA {rr['colonnina_idx']} ===\n" + rr.get("unifilare", "")
+
+    planimetria = header + "\n\n" + "=== NOTE PERCORSO DORSALE ===\n" + dorsale.get("planimetria", "")
+    for rr in linee:
+        planimetria += "\n\n" + f"=== NOTE PERCORSO LINEA COLONNINA {rr['colonnina_idx']} ===\n" + rr.get("planimetria", "")
+
+    # Struttura di ritorno:
+    # - mantiene un set di chiavi 'principali' per compatibilità UI (usa la linea 1 come default)
+    # - aggiunge 'multi' per consumatori avanzati / UI
+    base = dict(linee[0])  # copia della prima linea
+    base.update({
+        "multi": True,
+        "architettura": arch_norm,
+        "n_colonnine": int(n_colonnine),
+        "dorsale": dorsale,
+        "linee": linee,
+        "relazione": relazione,
+        "unifilare": unifilare,
+        "planimetria": planimetria,
+        "ok_722": ok_722,
+        "warning_722": warning_722,
+        "nonconf_722": nonconf_722,
+        "ok_441": ok_441,
+    })
+    return base
 
 def _fattore_rho_terreno(rho_km_w: float | None) -> tuple[float, float]:
     """
