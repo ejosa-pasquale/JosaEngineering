@@ -40,7 +40,7 @@ hr { margin: 1.1rem 0; }
     unsafe_allow_html=True,
 )
 
-st.title("⚡ Progettazione Ricarica Veicoli Elettrici (EV) – CEI 64-8 Sez. 7.22")
+st.title(" Progettazione Ricarica Veicoli Elettrici (EV) – CEI 64-8 Sez. 7.22")
 st.caption("Calcolo, verifica sezione linea, protezioni e relazione tecnica – eV Field Service")
 
 with st.sidebar:
