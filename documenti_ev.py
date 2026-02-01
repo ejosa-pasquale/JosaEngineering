@@ -1,4 +1,4 @@
-from io import BytesIO
+rom io import BytesIO
 import re
 from xml.sax.saxutils import escape
 
@@ -101,32 +101,7 @@ def genera_pdf_unico_bytes(
     # =========================
     # Relazione completa (testo originale)
     # =========================
-    story.append(_p("RELAZIONE COMPLETA
-
-
-DATI GENERALI
-Committente: Mario Rossi
-Ubicazione: Via Garibaldi 1, Mantova
-Sistema di distribuzione: TT
-Alimentazione EVSE: Trifase 400 V
-Modo di ricarica: Modo 3
-Punto di connessione: Connettore EV
-Installazione esterna: No
-Altezza punto di connessione: 1.00 m
-
-RIFERIMENTI NORMATIVI E LEGISLATIVI
-- Legge 186/68: regola dell’arte.
-- D.M. 37/08: realizzazione impianti all’interno degli edifici (ove applicabile).
-- CEI 64-8:
-  • Parte 4-41: protezione contro i contatti elettrici.
-  • Parte 4-43: protezione contro le sovracorrenti.
-  • Parte 5-52: condutture (scelta e posa).
-  • Parte 5-53: apparecchi di manovra e protezione.
-  • Parte 5-54: impianti di terra ed equipotenzialità.
-  • Parte 7-722: alimentazione dei veicoli elettrici.
-- IEC/CEI EN 61851-1: sistemi di ricarica conduttiva dei veicoli elettrici.
-- CEI EN 62305 / CEI 81-10: protezione contro sovratensioni (quando applicabile).
-", styles["Heading2"]))
+    story.append(_p("RELAZIONE COMPLETA", styles["Heading2"]))
     story.append(Spacer(1, 8))
     story.append(_p(relazione, styles["BodyText"]))
     story.append(PageBreak())
