@@ -4,14 +4,15 @@ import os
 import sys
 sys.path.insert(0, os.path.dirname(__file__))  # ensure local imports work when run from project root
 
-from calcolo_ev import genera_progetto_ev, PORTATA_BASE
+from calcolo_ev_updated import genera_progetto_ev, genera_progetto_ev_multi, PORTATA_BASE
 from documenti_ev import genera_pdf_unico_bytes
 
 # =========================
 # Config & Theme
 # =========================
 st.set_page_config(
-    page_title="Progetto Ricarica Veicoli Elettrici  – CEI 64-8/7.22",
+    page_title="Progetto EV – CEI 64-8/722",
+    page_icon="⚡",
     layout="wide",
 )
 
@@ -34,7 +35,7 @@ hr { margin: 1.1rem 0; }
     unsafe_allow_html=True,
 )
 
-st.title("⚡ Progettazione Ricarica Veicoli Elettrici (EV) – CEI 64-8 Sez. 7.22")
+st.title("⚡ Progettazione Ricarica Veicoli Elettrici (EV) – CEI 64-8 Sez. 722")
 st.caption("Calcolo, verifica sezione linea, protezioni e relazione tecnica – eV Field Service")
 
 with st.sidebar:
@@ -43,9 +44,11 @@ with st.sidebar:
         """
 - Inserisci i **dati impianto** (alimentazione, potenza, lunghezza).
 - Completa i **parametri di progetto** (cosφ, temperatura, raggruppamento).
-- Inserisci i **dati EV (Sez. 7.22)** (modo, punto, esterno, IP/IK, SPD).
+- Inserisci i **dati EV (Sez. 722)** (modo, punto, esterno, IP/IK, SPD).
 - Premi **Calcola** e scarica il **PDF**.
 
+**Nota “a prova di ingegnere elettrico”**
+- Il software non “inventa” dati: se una verifica richiede un valore non noto (es. Ra o Zs) puoi abilitarla solo se lo inserisci.
 """
     )
     st.divider()
@@ -126,6 +129,55 @@ with i6:
         help="TT: verifica tipica Ra·Id ≤ 50 V. TN: verifica Zs/impedenza anello e tempi di intervento.",
     )
 
+
+# =========================
+# Multi-colonnina
+# =========================
+st.subheader("2b) Architettura multi-colonnina")
+a1, a2, a3 = st.columns(3)
+with a1:
+    n_colonnine = st.selectbox(
+        "Numero colonnine",
+        [1, 2, 3, 4, 5],
+        index=0,
+        help="Se >1, il calcolo genera anche una dorsale e le linee dedicate per ciascuna colonnina.",
+    )
+
+if int(n_colonnine) > 1:
+    with a2:
+        architettura = st.selectbox(
+            "Schema di distribuzione",
+            [
+                "Dorsale unica + sottoquadro in prossimità",
+                "Sottoquadro con linee uniche",
+            ],
+            index=0,
+            help=(
+                "Dorsale unica: un unico tratto lungo comune fino al sottoquadro vicino alle colonnine, "
+                "poi linee brevi. "
+                "Linee uniche: sottoquadro vicino al quadro principale, poi linee lunghe dedicate."
+            ),
+        )
+    with a3:
+        distanza_dorsale_m = st.number_input(
+            "Distanza dorsale quadro → sottoquadro (m)",
+            min_value=1.0,
+            max_value=1000.0,
+            value=float(max(1.0, distanza_m)),
+            step=1.0,
+            help="Lunghezza del tratto comune (dorsale) o del tratto quadro→sottoquadro.",
+            key="distanza_dorsale_m",
+        )
+
+    # Ri-usa il campo distanza_m come "distanza linea"
+    st.info("Per più colonnine, il campo 'Distanza' sopra viene interpretato come: **sottoquadro → singola colonnina**.")
+    distanza_linea_m = float(distanza_m)
+else:
+    architettura = "Linea unica (1 colonnina)"
+    distanza_dorsale_m = None
+    distanza_linea_m = float(distanza_m)
+
+
 st.subheader("3) Parametri di progetto")
 p1, p2, p3, p4 = st.columns(4)
 with p1:
@@ -159,7 +211,7 @@ with p4:
         help="Se presente, può ridurre la potenza simultanea richiesta e migliorare compatibilità con fornitura.",
     )
 
-st.subheader("4) CEI 64-8/7 Sez. 7.22 – Dati EV")
+st.subheader("4) CEI 64-8/7 Sez. 722 – Dati EV")
 e1, e2, e3, e4 = st.columns(4)
 with e1:
     modo_ricarica = st.selectbox(
@@ -350,6 +402,32 @@ res = st.session_state.res
 # =========================
 if res:
     st.subheader("Risultati principali")
+
+if res.get("multi"):
+    st.markdown("**Tabella linee colonnine**")
+    rows = []
+    for rr in res.get("linee", []):
+        rows.append({
+            "Colonnina": rr.get("colonnina_idx"),
+            "Ib [A]": rr.get("Ib_a"),
+            "In [A]": rr.get("In_a"),
+            "Iz [A]": rr.get("Iz_a"),
+            "Sezione [mm²]": rr.get("sezione_mm2"),
+            "PE [mm²]": rr.get("sezione_pe_mm2"),
+            "k_ragg": rr.get("k_ragg"),
+        })
+    st.dataframe(rows, use_container_width=True)
+
+    st.markdown("**Dorsale (quadro → sottoquadro EV)**")
+    d = res.get("dorsale", {})
+    st.write({
+        "Ib [A]": d.get("Ib_a"),
+        "In [A]": d.get("In_a"),
+        "Iz [A]": d.get("Iz_a"),
+        "Sezione [mm²]": d.get("sezione_mm2"),
+        "PE [mm²]": d.get("sezione_pe_mm2"),
+    })
+
     m1, m2, m3, m4, m5, m6 = st.columns(6)
     m1.metric("Ib [A]", res.get("Ib_a", "—"))
     m2.metric("In [A]", res.get("In_a", "—"))
@@ -360,7 +438,7 @@ if res:
 
     st.divider()
 
-    t1, t2, t3 = st.tabs(["📄 Relazione", "✅ Checklist 7.22", "🧪 Verifiche 4-41"])
+    t1, t2, t3 = st.tabs(["📄 Relazione", "✅ Checklist 722", "🧪 Verifiche 4-41"])
     with t1:
         st.text_area("Relazione tecnica (anteprima)", res.get("relazione", ""), height=320)
         st.caption("Suggerimento: scarica il PDF per l’impaginazione completa e le sezioni formattate.")
@@ -419,7 +497,7 @@ if res:
     )
 
     st.download_button(
-        label="⬇️ Scarica PDF completo (Relazione Tecnica + Note per Unifilare + Note per Planimetria)",
+        label="⬇️ Scarica PDF completo (Relazione + Unifilare + Planimetria + Checklist 722)",
         data=pdf_bytes,
         file_name="Progetto_EV_CEI64-8_722.pdf",
         mime="application/pdf",
