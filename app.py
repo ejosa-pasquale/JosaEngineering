@@ -153,7 +153,6 @@ if int(n_colonnine) > 1:
             [
                 "Dorsale unica + sottoquadro in prossimità",
                 "Sottoquadro con linee uniche",
-                "Linee separate dal contatore",
             ],
             index=0,
             help=(
