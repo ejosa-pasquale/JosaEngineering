@@ -619,7 +619,18 @@ def genera_progetto_ev(
         "nonconf_441": esito_441["nonconf"],
     }
 
+def _fattore_rho_terreno(rho_km_w: float | None) -> tuple[float, float]:
+    """
+    Restituisce (k_rho, rho_usata). Riferimento tipico ρ=2.5 K·m/W.
+    Se rho_km_w è None, assume 2.5 (nessun derating).
+    """
+    rho = 2.5 if rho_km_w is None else float(rho_km_w)
+    return (_interp_dict(rho, FATT_RHO_TERRA), rho)
 
+
+# ==============================================================
+# ESTENSIONE MULTI-COLONNINA (aggiunta - non sostituisce nulla)
+# ==============================================================
 def genera_progetto_ev_multi(
     # anagrafica
     nome: str,
@@ -683,8 +694,11 @@ def genera_progetto_ev_multi(
     arch_key = arch.lower()
     if "dorsale" in arch_key and "prossimit" in arch_key:
         arch_norm = "Dorsale unica + sottoquadro in prossimità"
-    elif "linee" in arch_key and "uniche" in arch_key:
+    elif ("linee" in arch_key and "uniche" in arch_key) or ("sottoquadro" in arch_key and "uniche" in arch_key):
         arch_norm = "Sottoquadro con linee uniche"
+    elif "contatore" in arch_key or ("linee" in arch_key and "separate" in arch_key):
+        # Nuova opzione: linee dedicate dal contatore/quadro principale (senza sottoquadro EV)
+        arch_norm = "Linee separate dal contatore"
     else:
         # lascia passare valori custom ma segnala nelle note
         arch_norm = arch if arch else "Architettura non specificata"
@@ -692,39 +706,52 @@ def genera_progetto_ev_multi(
     # ---------------------------
     # Calcolo dorsale (quadro principale -> sottoquadro)
     # ---------------------------
-    potenza_dorsale_kw = float(potenza_kw) * int(n_colonnine)
+    # - per 'Linee separate dal contatore' NON esiste una dorsale dedicata (si va direttamente alle colonnine)
+    if arch_norm == "Linee separate dal contatore":
+        potenza_dorsale_kw = 0.0
+        dorsale = {
+            "relazione": "Architettura con linee dedicate dal contatore/quadro principale: dorsale EV non prevista.",
+            "unifilare": "Dorsale EV non prevista (linee dedicate dal contatore/quadro principale).",
+            "planimetria": "Percorso dorsale EV non previsto (linee dedicate dal contatore/quadro principale).",
+            "ok_722": [],
+            "warning_722": [],
+            "nonconf_722": [],
+            "ok_441": True,
+        }
+    else:
+        potenza_dorsale_kw = float(potenza_kw) * int(n_colonnine)
 
-    dorsale = genera_progetto_ev(
-        nome=nome,
-        cognome=cognome,
-        indirizzo=indirizzo,
-        potenza_kw=potenza_dorsale_kw,
-        distanza_m=float(distanza_dorsale_m),
-        alimentazione=alimentazione,
-        tipo_posa=tipo_posa,
-        sistema=sistema,
-        cosphi=cosphi,
-        temp_amb=temp_amb,
-        temp_terreno=temp_terreno,
-        rho_terreno_km_w=rho_terreno_km_w,
-        n_linee=1,
-        icc_ka=icc_ka,
-        modo_ricarica=modo_ricarica,
-        tipo_punto=tipo_punto,
-        esterno=esterno,
-        ip_rating=ip_rating,
-        ik_rating=ik_rating,
-        altezza_presa_m=altezza_presa_m,
-        spd_previsto=spd_previsto,
-        gestione_carichi=gestione_carichi,
-        rcd_tipo=rcd_tipo,
-        rcd_idn_ma=rcd_idn_ma,
-        evse_rdcdd_integrato=evse_rdcdd_integrato,
-        ra_ohm=ra_ohm,
-        ul_v=ul_v,
-        zs_ohm=zs_ohm,
-        t_intervento_s=t_intervento_s,
-    )
+        dorsale = genera_progetto_ev(
+            nome=nome,
+            cognome=cognome,
+            indirizzo=indirizzo,
+            potenza_kw=potenza_dorsale_kw,
+            distanza_m=float(distanza_dorsale_m),
+            alimentazione=alimentazione,
+            tipo_posa=tipo_posa,
+            sistema=sistema,
+            cosphi=cosphi,
+            temp_amb=temp_amb,
+            temp_terreno=temp_terreno,
+            rho_terreno_km_w=rho_terreno_km_w,
+            n_linee=1,
+            icc_ka=icc_ka,
+            modo_ricarica=modo_ricarica,
+            tipo_punto=tipo_punto,
+            esterno=esterno,
+            ip_rating=ip_rating,
+            ik_rating=ik_rating,
+            altezza_presa_m=altezza_presa_m,
+            spd_previsto=spd_previsto,
+            gestione_carichi=gestione_carichi,
+            rcd_tipo=rcd_tipo,
+            rcd_idn_ma=rcd_idn_ma,
+            evse_rdcdd_integrato=evse_rdcdd_integrato,
+            ra_ohm=ra_ohm,
+            ul_v=ul_v,
+            zs_ohm=zs_ohm,
+            t_intervento_s=t_intervento_s,
+        )
 
     # ---------------------------
     # Calcolo linee colonnine (sottoquadro -> singola EVSE)
@@ -745,7 +772,7 @@ def genera_progetto_ev_multi(
             temp_amb=temp_amb,
             temp_terreno=temp_terreno,
             rho_terreno_km_w=rho_terreno_km_w,
-            n_linee=int(n_colonnine),
+            n_linee=(1 if arch_norm == "Linee separate dal contatore" else int(n_colonnine)),
             icc_ka=icc_ka,
             modo_ricarica=modo_ricarica,
             tipo_punto=tipo_punto,
@@ -795,16 +822,18 @@ def genera_progetto_ev_multi(
     Potenza per colonnina: {potenza_kw:.1f} kW
     Potenza totale (dorsale): {potenza_dorsale_kw:.1f} kW
 
-    Distanza dorsale (quadro principale -> sottoquadro): {distanza_dorsale_m:.1f} m
+    Distanza dorsale (quadro principale -> sottoquadro): {distanza_dorsale_m:.1f} m\n    (N/A se 'Linee separate dal contatore')
     Distanza linee (sottoquadro -> colonnina): {distanza_linea_m:.1f} m
     """).strip()
 
     relazione = header + "\n\n" + dedent("""
     NOTE DI ARCHITETTURA
     --------------------
-    - La dorsale alimenta un sottoquadro dedicato EV (con protezioni e SPD dove necessario).
-    - Ogni colonnina è servita da una linea dedicata dal sottoquadro, con protezione magnetotermica e differenziale.
-    - Il raggruppamento di più linee è considerato nel derating tramite n_linee = n_colonnine (fattore k_ragg).
+    - Architettura 'Dorsale unica' / 'Sottoquadro': la dorsale alimenta un sottoquadro dedicato EV (con protezioni e SPD dove necessario).
+    - Architettura 'Linee separate dal contatore': ogni colonnina è alimentata direttamente dal contatore/quadro principale (nessuna dorsale EV, nessun sottoquadro EV dedicato).
+    - Ogni colonnina è servita da una linea dedicata, con protezione magnetotermica e differenziale.
+    - Raggruppamento: se le linee condividono lo stesso percorso/cavidotto, il derating è considerato con n_linee = n_colonnine.
+      Se le linee sono separate dal contatore (percorsi indipendenti), viene usato n_linee = 1 per ciascuna linea.
     """).strip()
 
     relazione += "\n\n" + "=== DORSALE (QUADRO PRINCIPALE -> SOTTOQUADRO EV) ===\n" + dorsale.get("relazione", "")
@@ -846,3 +875,4 @@ def _fattore_rho_terreno(rho_km_w: float | None) -> tuple[float, float]:
     """
     rho = 2.5 if rho_km_w is None else float(rho_km_w)
     return (_interp_dict(rho, FATT_RHO_TERRA), rho)
+
