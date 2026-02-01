@@ -5,7 +5,7 @@ from documenti_ev import genera_pdf_unico_bytes
 
 st.set_page_config(page_title="Progetto EV – CEI 64-8/722", page_icon="⚡", layout="wide")
 
-st.title("⚡Progettazione Ricarica Veicoli Elettrici (EV) – CEI 64-8 Sez. 722 ⚡")
+st.title("⚡Progettazione Ricarica Veicoli Elettrici (EV) – CEI 64-8 Sez. 7.22 ⚡")
 st.caption(" Calcolo, verifica sezione linea, protezioni e relazione tecnica per EVs by eV Field Service")
 
 st.divider()
@@ -136,7 +136,7 @@ if res:
 
     st.divider()
 
-    tab1, tab2, tab3, tab4, tab5 = st.tabs(["Relazione", "Unifilare", "Planimetria", "Checklist 722", "Check 4-41"])
+    tab1, tab2, tab3, tab4, tab5 = st.tabs(["Relazione", "Unifilare", "Planimetria", "Checklist 7.22", "Check 4-41"])
 
     with tab1:
         st.text_area("Relazione tecnica", value=res["relazione"], height=420)
