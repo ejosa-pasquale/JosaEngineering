@@ -11,8 +11,7 @@ from documenti_ev import genera_pdf_unico_bytes
 # Config & Theme
 # =========================
 st.set_page_config(
-    page_title="Progetto EV – CEI 64-8/7.22",
-    page_icon="⚡",
+    page_title="Progetto Ricarica Veicoli Elettrici  – CEI 64-8/7.22",
     layout="wide",
 )
 
