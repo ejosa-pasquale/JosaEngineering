@@ -4,7 +4,7 @@ import os
 import sys
 sys.path.insert(0, os.path.dirname(__file__))  # ensure local imports work when run from project root
 
-from calcolo_ev_updated import genera_progetto_ev, genera_progetto_ev_multi, PORTATA_BASE
+from calcolo_ev import genera_progetto_ev, genera_progetto_ev_multi, PORTATA_BASE
 from documenti_ev import genera_pdf_unico_bytes
 
 # =========================
