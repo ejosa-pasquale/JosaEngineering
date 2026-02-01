@@ -875,4 +875,3 @@ def _fattore_rho_terreno(rho_km_w: float | None) -> tuple[float, float]:
     """
     rho = 2.5 if rho_km_w is None else float(rho_km_w)
     return (_interp_dict(rho, FATT_RHO_TERRA), rho)
-
