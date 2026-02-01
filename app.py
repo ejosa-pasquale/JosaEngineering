@@ -356,6 +356,48 @@ if "res" not in st.session_state:
 # =========================
 left, right = st.columns([1, 2])
 with left:
+
+# ===============================
+# 5b) Correttivi posa interrata (opzionali)
+# ===============================
+# Default "blindati" per evitare NameError anche se la sezione UI viene rimossa/modificata
+temp_terra_enable = False
+rho_enable = False
+temp_terreno = 20  # °C (valore tipico)
+rho_terra = 2.5    # K·m/W (valore tipico terreno)
+
+with st.expander("Correttivi posa interrata (opzionali)"):
+    st.caption("Usa questi campi solo se stai dimensionando una linea **interrata** e hai dati attendibili.")
+    ctt1, ctt2 = st.columns(2)
+    with ctt1:
+        temp_terra_enable = st.checkbox(
+            "Considera temperatura del terreno",
+            value=False,
+            help="Se abilitato, la temperatura del terreno viene passata al calcolo (solo posa Interrata).",
+        )
+        temp_terreno = st.number_input(
+            "Temperatura terreno (°C)",
+            min_value=-10,
+            max_value=60,
+            value=int(temp_terreno),
+            step=1,
+            disabled=not temp_terra_enable,
+        )
+    with ctt2:
+        rho_enable = st.checkbox(
+            "Considera resistività termica del terreno (ρ)",
+            value=False,
+            help="Se abilitato, ρ (K·m/W) viene passata al calcolo (solo posa Interrata).",
+        )
+        rho_terra = st.number_input(
+            "ρ terreno (K·m/W)",
+            min_value=0.5,
+            max_value=5.0,
+            value=float(rho_terra),
+            step=0.1,
+            disabled=not rho_enable,
+        )
+
     calcola = st.button("✅ Calcola e genera documenti", type="primary")
 with right:
     st.markdown(
@@ -447,6 +489,14 @@ if calcola:
 
 res = st.session_state.res
 
+# Guard-rail: evita crash se il calcolo non ha prodotto un dizionario
+if res is None:
+    st.warning("Nessun risultato disponibile: esegui il calcolo oppure controlla gli errori sopra.")
+    st.stop()
+if not isinstance(res, dict):
+    st.error(f"Errore interno: risultato inatteso (tipo={type(res)}).")
+    st.stop()
+
 # =========================
 # Output
 # =========================
@@ -454,7 +504,8 @@ if isinstance(res, dict) and res:
     st.subheader("Risultati principali")
 
     # Extra output per modalità multi-colonnina
-    if res.get("multi", False):
+    is_multi = isinstance(res, dict) and res.get("multi", False)
+    if is_multi:
         st.markdown("**Tabella linee colonnine**")
         rows = []
         for rr in res.get("linee", []):
