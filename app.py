@@ -4,7 +4,12 @@ import os
 import sys
 sys.path.insert(0, os.path.dirname(__file__))  # ensure local imports work when run from project root
 
-from calcolo_ev import genera_progetto_ev, genera_progetto_ev_multi, PORTATA_BASE
+try:
+    from calcolo_ev import genera_progetto_ev, genera_progetto_ev_multi, PORTATA_BASE
+except Exception:
+    # fallback: older calcolo_ev without multi
+    from calcolo_ev import genera_progetto_ev, PORTATA_BASE
+    genera_progetto_ev_multi = None
 from documenti_ev import genera_pdf_unico_bytes
 
 # =========================
@@ -150,6 +155,7 @@ if int(n_colonnine) > 1:
             [
                 "Dorsale unica + sottoquadro in prossimità",
                 "Sottoquadro con linee uniche",
+                "Linee separate dal contatore",
             ],
             index=0,
             help=(
@@ -170,7 +176,10 @@ if int(n_colonnine) > 1:
         )
 
     # Ri-usa il campo distanza_m come "distanza linea"
-    st.info("Per più colonnine, il campo 'Distanza' sopra viene interpretato come: **sottoquadro → singola colonnina**.")
+    if architettura == "Linee separate dal contatore":
+        st.info("Per 'Linee separate dal contatore', il campo 'Distanza' sopra è: **contatore/quadro principale → singola colonnina**.")
+    else:
+        st.info("Per più colonnine, il campo 'Distanza' sopra viene interpretato come: **sottoquadro → singola colonnina**.")
     distanza_linea_m = float(distanza_m)
 else:
     architettura = "Linea unica (1 colonnina)"
@@ -361,34 +370,75 @@ if calcola:
         st.stop()
 
     try:
-        res = genera_progetto_ev(
-            nome=nome,
-            cognome=cognome,
-            indirizzo=indirizzo,
-            potenza_kw=potenza_kw,
-            distanza_m=distanza_m,
-            alimentazione=alimentazione,
-            tipo_posa=tipo_posa,
-            sistema=sistema,
-            cosphi=cosphi,
-            temp_amb=temp_amb,
-            n_linee=int(n_linee),
-            icc_ka=icc_ka,
-            modo_ricarica=modo_ricarica,
-            tipo_punto=tipo_punto,
-            esterno=esterno,
-            ip_rating=int(ip_rating),
-            ik_rating=int(ik_rating),
-            altezza_presa_m=float(altezza_presa_m),
-            spd_previsto=spd_previsto,
-            gestione_carichi=gestione_carichi,
-            rcd_tipo=rcd_tipo,
-            rcd_idn_ma=int(rcd_idn_ma),
-            evse_rdcdd_integrato=evse_rdcdd_integrato,
-            ra_ohm=(float(ra_ohm) if ra_enable else None),
-            zs_ohm=(float(zs_ohm) if zs_enable else None),
-            t_intervento_s=(float(t_int) if t_enable else None),
-        )
+        if int(n_colonnine) > 1:
+            if genera_progetto_ev_multi is None:
+                raise RuntimeError("Modulo multi-colonnina non disponibile (genera_progetto_ev_multi mancante).")
+
+            res = genera_progetto_ev_multi(
+                nome=nome,
+                cognome=cognome,
+                indirizzo=indirizzo,
+                n_colonnine=int(n_colonnine),
+                architettura=architettura,
+                potenza_kw=float(potenza_kw),
+                distanza_dorsale_m=float(distanza_dorsale_m or 1.0),
+                distanza_linea_m=float(distanza_linea_m),
+                alimentazione=alimentazione,
+                tipo_posa=tipo_posa,
+                sistema=sistema,
+                cosphi=cosphi,
+                temp_amb=int(temp_amb),
+                temp_terreno=(int(temp_terreno) if (tipo_posa == "Interrata" and temp_terra_enable) else None),
+                rho_terreno_km_w=(float(rho_terra) if (tipo_posa == "Interrata" and rho_enable) else None),
+                n_linee=int(n_linee),  # compat: non usato nel multi (derating gestito internamente)
+                icc_ka=float(icc_ka),
+                modo_ricarica=modo_ricarica,
+                tipo_punto=tipo_punto,
+                esterno=esterno,
+                ip_rating=int(ip_rating),
+                ik_rating=int(ik_rating),
+                altezza_presa_m=float(altezza_presa_m),
+                spd_previsto=spd_previsto,
+                gestione_carichi=gestione_carichi,
+                rcd_tipo=rcd_tipo,
+                rcd_idn_ma=int(rcd_idn_ma),
+                evse_rdcdd_integrato=evse_rdcdd_integrato,
+                ra_ohm=(float(ra_ohm) if ra_enable else None),
+                zs_ohm=(float(zs_ohm) if zs_enable else None),
+                t_intervento_s=(float(t_int) if t_enable else None),
+            )
+        else:
+            res = genera_progetto_ev(
+                nome=nome,
+                cognome=cognome,
+                indirizzo=indirizzo,
+                potenza_kw=float(potenza_kw),
+                distanza_m=float(distanza_m),
+                alimentazione=alimentazione,
+                tipo_posa=tipo_posa,
+                sistema=sistema,
+                cosphi=cosphi,
+                temp_amb=int(temp_amb),
+                temp_terreno=(int(temp_terreno) if (tipo_posa == "Interrata" and temp_terra_enable) else None),
+                rho_terreno_km_w=(float(rho_terra) if (tipo_posa == "Interrata" and rho_enable) else None),
+                n_linee=int(n_linee),
+                icc_ka=float(icc_ka),
+                modo_ricarica=modo_ricarica,
+                tipo_punto=tipo_punto,
+                esterno=esterno,
+                ip_rating=int(ip_rating),
+                ik_rating=int(ik_rating),
+                altezza_presa_m=float(altezza_presa_m),
+                spd_previsto=spd_previsto,
+                gestione_carichi=gestione_carichi,
+                rcd_tipo=rcd_tipo,
+                rcd_idn_ma=int(rcd_idn_ma),
+                evse_rdcdd_integrato=evse_rdcdd_integrato,
+                ra_ohm=(float(ra_ohm) if ra_enable else None),
+                zs_ohm=(float(zs_ohm) if zs_enable else None),
+                t_intervento_s=(float(t_int) if t_enable else None),
+            )
+
         st.session_state.res = res
         st.success("Calcolo completato.")
     except Exception as e:
@@ -400,33 +450,36 @@ res = st.session_state.res
 # =========================
 # Output
 # =========================
-if res:
+if isinstance(res, dict) and res:
     st.subheader("Risultati principali")
 
-if res.get("multi"):
-    st.markdown("**Tabella linee colonnine**")
-    rows = []
-    for rr in res.get("linee", []):
-        rows.append({
-            "Colonnina": rr.get("colonnina_idx"),
-            "Ib [A]": rr.get("Ib_a"),
-            "In [A]": rr.get("In_a"),
-            "Iz [A]": rr.get("Iz_a"),
-            "Sezione [mm²]": rr.get("sezione_mm2"),
-            "PE [mm²]": rr.get("sezione_pe_mm2"),
-            "k_ragg": rr.get("k_ragg"),
-        })
-    st.dataframe(rows, use_container_width=True)
+    # Extra output per modalità multi-colonnina
+    if res.get("multi", False):
+        st.markdown("**Tabella linee colonnine**")
+        rows = []
+        for rr in res.get("linee", []):
+            rows.append({
+                "Colonnina": rr.get("colonnina_idx"),
+                "Ib [A]": rr.get("Ib_a"),
+                "In [A]": rr.get("In_a"),
+                "Iz [A]": rr.get("Iz_a"),
+                "Sezione [mm²]": rr.get("sezione_mm2"),
+                "PE [mm²]": rr.get("sezione_pe_mm2"),
+                "k_ragg": rr.get("k_ragg"),
+            })
+        st.dataframe(rows, use_container_width=True)
 
-    st.markdown("**Dorsale (quadro → sottoquadro EV)**")
-    d = res.get("dorsale", {})
-    st.write({
-        "Ib [A]": d.get("Ib_a"),
-        "In [A]": d.get("In_a"),
-        "Iz [A]": d.get("Iz_a"),
-        "Sezione [mm²]": d.get("sezione_mm2"),
-        "PE [mm²]": d.get("sezione_pe_mm2"),
-    })
+        st.markdown("**Dorsale (quadro → sottoquadro EV)**")
+        d = res.get("dorsale", {})
+        st.write({
+            "Ib [A]": d.get("Ib_a"),
+            "In [A]": d.get("In_a"),
+            "Iz [A]": d.get("Iz_a"),
+            "Sezione [mm²]": d.get("sezione_mm2"),
+            "PE [mm²]": d.get("sezione_pe_mm2"),
+        })
+
+        st.divider()
 
     m1, m2, m3, m4, m5, m6 = st.columns(6)
     m1.metric("Ib [A]", res.get("Ib_a", "—"))
