@@ -1,5 +1,9 @@
 import streamlit as st
 
+import os
+import sys
+sys.path.insert(0, os.path.dirname(__file__))  # ensure local imports work when run from project root
+
 from calcolo_ev import genera_progetto_ev, PORTATA_BASE
 from documenti_ev import genera_pdf_unico_bytes
 
@@ -7,7 +11,7 @@ from documenti_ev import genera_pdf_unico_bytes
 # Config & Theme
 # =========================
 st.set_page_config(
-    page_title="Progetto EV – CEI 64-8/7.22",
+    page_title="Progetto EV – CEI 64-8/722",
     page_icon="⚡",
     layout="wide",
 )
@@ -31,7 +35,7 @@ hr { margin: 1.1rem 0; }
     unsafe_allow_html=True,
 )
 
-st.title("⚡ Progettazione Ricarica Veicoli Elettrici (EV) – CEI 64-8 Sez. 7.22")
+st.title("⚡ Progettazione Ricarica Veicoli Elettrici (EV) – CEI 64-8 Sez. 722")
 st.caption("Calcolo, verifica sezione linea, protezioni e relazione tecnica – eV Field Service")
 
 with st.sidebar:
@@ -40,7 +44,7 @@ with st.sidebar:
         """
 - Inserisci i **dati impianto** (alimentazione, potenza, lunghezza).
 - Completa i **parametri di progetto** (cosφ, temperatura, raggruppamento).
-- Inserisci i **dati EV (Sez. 7.22)** (modo, punto, esterno, IP/IK, SPD).
+- Inserisci i **dati EV (Sez. 722)** (modo, punto, esterno, IP/IK, SPD).
 - Premi **Calcola** e scarica il **PDF**.
 
 **Nota “a prova di ingegnere elettrico”**
@@ -359,7 +363,7 @@ if res:
 
     st.divider()
 
-    t1, t2, t3 = st.tabs(["📄 Relazione", "✅ Checklist 7.22", "🧪 Verifiche 4-41"])
+    t1, t2, t3 = st.tabs(["📄 Relazione", "✅ Checklist 722", "🧪 Verifiche 4-41"])
     with t1:
         st.text_area("Relazione tecnica (anteprima)", res.get("relazione", ""), height=320)
         st.caption("Suggerimento: scarica il PDF per l’impaginazione completa e le sezioni formattate.")
