@@ -1,51 +1,57 @@
+from __future__ import annotations
+
 from io import BytesIO
-import re
 from xml.sax.saxutils import escape
+import re
+from typing import Iterable, List
 
 from reportlab.lib.pagesizes import A4
+from reportlab.lib.units import mm
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, PageBreak, Table, TableStyle
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
+from reportlab.lib.styles import getSampleStyleSheet
 
 
 def _p(text: str, style):
-    """Paragraph safe-escape helper."""
     safe = escape(text).replace("\n", "<br/>")
     return Paragraph(safe, style)
 
 
-def _extract_formula_lines(relazione: str) -> list[str]:
-    """Estrae righe 'utili' (formule/verifiche) dalla relazione per una sezione riassuntiva.
-    Non modifica i calcoli: serve solo a rendere più leggibile il report.
+def _extract_formula_lines(relazione: str, max_lines: int = 40) -> List[str]:
     """
+    Estrae righe 'formula-like' dalla relazione (senza alterare i calcoli).
+    Criterio: presenza di '=', '≤', '>=', '<=', '∆', 'Δ', 'I2t', 'k2', 'sqrt', ecc.
+    """
+    if not relazione:
+        return []
+
     lines = []
     for raw in relazione.splitlines():
         s = raw.strip()
         if not s:
             continue
-        # euristiche: righe con simboli matematici o confronti tipici impiantistici
-        if any(tok in s for tok in ["=", "≤", "≥", "Ib", "In", "Iz", "ΔV", "IΔn", "Ra", "Zs", "k", "I²t", "U0", "Un"]):
-            # evita righe troppo lunghe (paragrafi)
-            if len(s) <= 140:
-                lines.append(s)
-    # de-dup preservando ordine
+        if any(tok in s for tok in ["=", "≤", "≥", "<=", ">=", "∆", "Δ", "I2t", "I²t", "k2", "K2", "√", "sqrt", "cosφ", "sinφ"]):
+            # evita righe lunghissime "discorsive"
+            if len(s) > 180:
+                continue
+            lines.append(s)
+
+    # dedup mantenendo ordine
     seen = set()
     out = []
     for s in lines:
-        key = s.replace(" ", "")
-        if key in seen:
-            continue
-        seen.add(key)
-        out.append(s)
-    # limita: meglio poche righe “forti” che pagine di rumore
-    return out[:18]
+        if s not in seen:
+            out.append(s)
+            seen.add(s)
+        if len(out) >= max_lines:
+            break
+    return out
 
 
-def _add_page_number(canvas, doc):
+def _page_number(canvas, doc):
     canvas.saveState()
     canvas.setFont("Helvetica", 9)
-    canvas.setFillColor(colors.grey)
-    canvas.drawRightString(A4[0] - 36, 20, f"Pag. {doc.page}")
+    canvas.drawRightString(200 * mm, 12 * mm, f"Pag. {doc.page}")
     canvas.restoreState()
 
 
@@ -53,40 +59,29 @@ def genera_pdf_unico_bytes(
     relazione: str,
     unifilare: str,
     planimetria: str,
-    ok_722=None,
-    warning_722=None,
-    nonconf_722=None
-) -> bytes:
-    ok_722 = ok_722 or []
-    warning_722 = warning_722 or []
-    nonconf_722 = nonconf_722 or []
-
+    ok_722: Iterable[str],
+    warning_722: Iterable[str],
+    nonconf_722: Iterable[str],
+):
+    """
+    PDF tecnico EV:
+    - Relazione completa
+    - Schema unifilare (testo / note)
+    - Planimetria (testo / note)
+    - Check-list CEI 64-8/722
+    - In fondo: 'Conformità e Formule di verifica' (come richiesto)
+    """
     buf = BytesIO()
     styles = getSampleStyleSheet()
-
-    # Stili “più professionali”
-    styles.add(ParagraphStyle(
-        name="SmallMuted",
-        parent=styles["BodyText"],
-        fontSize=9,
-        leading=11,
-        textColor=colors.grey,
-    ))
-    styles.add(ParagraphStyle(
-        name="Mono",
-        parent=styles["BodyText"],
-        fontName="Courier",
-        fontSize=9.5,
-        leading=12,
-    ))
 
     doc = SimpleDocTemplate(
         buf,
         pagesize=A4,
-        leftMargin=36,
-        rightMargin=36,
-        topMargin=42,
-        bottomMargin=36
+        leftMargin=18 * mm,
+        rightMargin=18 * mm,
+        topMargin=16 * mm,
+        bottomMargin=16 * mm,
+        title="Relazione tecnica EV – CEI 64-8/722",
     )
 
     story = []
@@ -96,15 +91,17 @@ def genera_pdf_unico_bytes(
     # =========================
     story.append(_p("RELAZIONE TECNICA – INFRASTRUTTURA DI RICARICA EV", styles["Title"]))
     story.append(Spacer(1, 6))
+    story.append(_p("CEI 64-8 (Sez. 722)", styles["Heading2"]))
     story.append(Spacer(1, 14))
 
     # =========================
-    # Relazione completa (testo originale)
+    # Relazione completa
     # =========================
-    story.append(_p("RELAZIONE COMPLETA
+    story.append(_p("RELAZIONE COMPLETA", styles["Title"]))
+    story.append(Spacer(1, 10))
 
-
-DATI GENERALI
+    # Blocco richiesto: inizio pagina dopo "RELAZIONE COMPLETA" (duplicato, resta anche in fondo)
+    dati_norme_blocco = """DATI GENERALI
 Committente: Mario Rossi
 Ubicazione: Via Garibaldi 1, Mantova
 Sistema di distribuzione: TT
@@ -125,19 +122,21 @@ RIFERIMENTI NORMATIVI E LEGISLATIVI
   • Parte 5-54: impianti di terra ed equipotenzialità.
   • Parte 7-722: alimentazione dei veicoli elettrici.
 - IEC/CEI EN 61851-1: sistemi di ricarica conduttiva dei veicoli elettrici.
-- CEI EN 62305 / CEI 81-10: protezione contro sovratensioni (quando applicabile).
-", styles["Heading2"]))
-    story.append(Spacer(1, 8))
-    story.append(_p(relazione, styles["BodyText"]))
+- CEI EN 62305 / CEI 81-10: valutazione protezione contro sovratensioni (quando applicabile).
+"""
+    story.append(_p(dati_norme_blocco, styles["BodyText"]))
+    story.append(Spacer(1, 10))
+    story.append(_p(relazione or "—", styles["BodyText"]))
+
     story.append(PageBreak())
 
     # =========================
-    # Unifilare (testo/descrizione)
+    # Schema unifilare
     # =========================
     story.append(_p("SCHEMA UNIFILARE", styles["Title"]))
     story.append(Spacer(1, 10))
-    story.append(Spacer(1, 10))
-    story.append(_p(unifilare, styles["BodyText"]))
+    story.append(_p(unifilare or "—", styles["BodyText"]))
+
     story.append(PageBreak())
 
     # =========================
@@ -145,59 +144,67 @@ RIFERIMENTI NORMATIVI E LEGISLATIVI
     # =========================
     story.append(_p("PLANIMETRIA", styles["Title"]))
     story.append(Spacer(1, 10))
-    story.append(_p(planimetria, styles["BodyText"]))
+    story.append(_p(planimetria or "—", styles["BodyText"]))
+
     story.append(PageBreak())
 
     # =========================
-    # Checklist 722 (più leggibile)
+    # Checklist 722 (tabella chiara)
     # =========================
     story.append(_p("CHECK-LIST CEI 64-8/7 – SEZIONE 722", styles["Title"]))
-    story.append(Spacer(1, 12))
+    story.append(Spacer(1, 10))
 
-    def _items_to_rows(items):
+    def _fmt(items: Iterable[str]) -> str:
+        items = list(items or [])
         if not items:
-            return [["—", "(nessuno)"]]
-        return [[str(i+1), it] for i, it in enumerate(items)]
+            return "—"
+        return "\n".join([f"• {x}" for x in items])
 
-    def add_table(title, items, accent):
-        story.append(_p(title, styles["Heading2"]))
+    data = [
+        ["Esiti OK", _fmt(ok_722)],
+        ["Warning", _fmt(warning_722)],
+        ["Non conformità", _fmt(nonconf_722)],
+    ]
+
+    table = Table(data, colWidths=[40*mm, 150*mm])
+    table.setStyle(TableStyle([
+        ("BACKGROUND", (0,0), (0,2), colors.whitesmoke),
+        ("VALIGN", (0,0), (-1,-1), "TOP"),
+        ("BOX", (0,0), (-1,-1), 0.5, colors.black),
+        ("INNERGRID", (0,0), (-1,-1), 0.25, colors.grey),
+        ("FONTNAME", (0,0), (-1,-1), "Helvetica"),
+        ("FONTSIZE", (0,0), (-1,-1), 9),
+        ("LEFTPADDING", (0,0), (-1,-1), 6),
+        ("RIGHTPADDING", (0,0), (-1,-1), 6),
+        ("TOPPADDING", (0,0), (-1,-1), 6),
+        ("BOTTOMPADDING", (0,0), (-1,-1), 6),
+    ]))
+    story.append(table)
+
+    story.append(PageBreak())
+
+    # =========================
+    # Conformità + Formule (IN FONDO, come richiesto)
+    # =========================
+    story.append(_p("CONFORMITÀ E FORMULE DI VERIFICA", styles["Title"]))
+    story.append(Spacer(1, 10))
+
+    story.append(_p("Conforme: CEI 64-8 (Sez. 722)", styles["BodyText"]))
+    story.append(Spacer(1, 6))
+
+    # Blocco richiesto mantenuto anche in fondo (duplicato)
+    story.append(_p(dati_norme_blocco, styles["BodyText"]))
+    story.append(Spacer(1, 10))
+
+    # Formule: estrazione "ingegnere-friendly" (senza note inutili)
+    formula_lines = _extract_formula_lines(relazione)
+    if formula_lines:
+        story.append(_p("FORMULE E VERIFICHE (estratto)", styles["Heading2"]))
         story.append(Spacer(1, 6))
-        data = _items_to_rows(items)
-        tbl = Table(data, colWidths=[22, A4[0] - 36 - 36 - 22])
-        tbl.setStyle(TableStyle([
-            ("BACKGROUND", (0,0), (-1,0), colors.whitesmoke),
-            ("TEXTCOLOR", (0,0), (-1,-1), colors.black),
-            ("FONTNAME", (0,0), (-1,-1), "Helvetica"),
-            ("FONTSIZE", (0,0), (-1,-1), 9.8),
-            ("LINEBELOW", (0,0), (-1,-1), 0.25, colors.lightgrey),
-            ("VALIGN", (0,0), (-1,-1), "TOP"),
-            ("LEFTPADDING", (0,0), (-1,-1), 6),
-            ("RIGHTPADDING", (0,0), (-1,-1), 6),
-            ("TOPPADDING", (0,0), (-1,-1), 4),
-            ("BOTTOMPADDING", (0,0), (-1,-1), 4),
-            ("LINEBEFORE", (0,0), (0,-1), 2.0, accent),
-        ]))
-        story.append(tbl)
-        story.append(Spacer(1, 12))
+        story.append(_p("\n".join(formula_lines), styles["BodyText"]))
+    else:
+        story.append(_p("FORMULE E VERIFICHE (estratto)", styles["Heading2"]))
+        story.append(_p("—", styles["BodyText"]))
 
-    add_table("Esiti OK", ok_722, colors.green)
-    add_table("Warning", warning_722, colors.orange)
-    add_table("Non conformità", nonconf_722, colors.red)
-
-
-    # =========================
-    # Formule & Verifiche (estratto) - in fondo al report
-    # =========================
-    formulae = _extract_formula_lines(relazione)
-    if formulae:
-        story.append(PageBreak())
-        story.append(_p("FORMULE E VERIFICHE", styles["Title"]))
-        story.append(Spacer(1, 10))
-        for s in formulae:
-            story.append(_p(s, styles["Mono"]))
-            story.append(Spacer(1, 3))
-        story.append(Spacer(1, 12))
-        story.append(_p("Conforme: CEI 64-8 (Sez. 722)", styles["SmallMuted"]))
-
-    doc.build(story, onFirstPage=_add_page_number, onLaterPages=_add_page_number)
+    doc.build(story, onFirstPage=_page_number, onLaterPages=_page_number)
     return buf.getvalue()
