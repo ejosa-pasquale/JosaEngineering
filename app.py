@@ -46,8 +46,6 @@ with st.sidebar:
 - Inserisci i **dati EV (Sez. 7.22)** (modo, punto, esterno, IP/IK, SPD).
 - Premi **Calcola** e scarica il **PDF**.
 
-**Nota “a prova di ingegnere elettrico”**
-- Il software non “inventa” dati: se una verifica richiede un valore non noto (es. Ra o Zs) puoi abilitarla solo se lo inserisci.
 """
     )
     st.divider()
