@@ -218,7 +218,7 @@ with p4:
         help="Se presente, può ridurre la potenza simultanea richiesta e migliorare compatibilità con fornitura.",
     )
 
-st.subheader("4) CEI 64-8/7 Sez. 7.22 – Dati EV")
+st.subheader("4) CEI 64-8/7 Sez. 7.22 – Dati Caratteristici della Wallbox / Colonnina")
 e1, e2, e3, e4 = st.columns(4)
 with e1:
     modo_ricarica = st.selectbox(
