@@ -17,7 +17,7 @@ from documenti_ev import genera_pdf_unico_bytes
 # =========================
 st.set_page_config(
     page_title="Progettazione Infrastruttura Ricarica Elettrica – CEI 64-8/7.22",
-    page_icon="⚡",
+    page_icon="",
     layout="wide",
 )
 
