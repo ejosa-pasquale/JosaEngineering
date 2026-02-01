@@ -89,9 +89,9 @@ def genera_pdf_unico_bytes(
     # =========================
     # Copertina breve
     # =========================
-    story.append(_p("RELAZIONE TECNICA – INFRASTRUTTURA DI RICARICA EV", styles["Title"]))
+    story.append(_p("RELAZIONE TECNICA – INFRASTRUTTURA DI RICARICA PER VEICOLI ELETTRICI", styles["Title"]))
     story.append(Spacer(1, 6))
-    story.append(_p("CEI 64-8 (Sez. 722)", styles["Heading2"]))
+    story.append(_p("CEI 64-8 (Sez. 7.22)", styles["Heading2"]))
     story.append(Spacer(1, 14))
 
     # =========================
@@ -151,7 +151,7 @@ RIFERIMENTI NORMATIVI E LEGISLATIVI
     # =========================
     # Checklist 722 (tabella chiara)
     # =========================
-    story.append(_p("CHECK-LIST CEI 64-8/7 – SEZIONE 722", styles["Title"]))
+    story.append(_p("CHECK-LIST CEI 64-8/7 – SEZIONE 7.22", styles["Title"]))
     story.append(Spacer(1, 10))
 
     def _fmt(items: Iterable[str]) -> str:
@@ -189,7 +189,7 @@ RIFERIMENTI NORMATIVI E LEGISLATIVI
     story.append(_p("CONFORMITÀ E FORMULE DI VERIFICA", styles["Title"]))
     story.append(Spacer(1, 10))
 
-    story.append(_p("Conforme: CEI 64-8 (Sez. 722)", styles["BodyText"]))
+    story.append(_p("Conforme: CEI 64-8 (Sez. 7.22)", styles["BodyText"]))
     story.append(Spacer(1, 6))
 
     # Blocco richiesto mantenuto anche in fondo (duplicato)
