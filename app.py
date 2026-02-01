@@ -402,13 +402,7 @@ with left:
     # Pulsante sempre visibile (fuori dal blocco correttivi)
     calcola = st.button("✅ Calcola e genera documenti", type="primary")
 
-with right:
 
-    st.markdown(
-        '<div class="card"><b>Controllo rapido:</b> se sei in monofase, la potenza massima ammessa qui è 7,4 kW. '
-        "Per potenze superiori seleziona trifase.</div>",
-        unsafe_allow_html=True,
-    )
 
 if calcola:
     if alimentazione == "Monofase 230 V" and potenza_kw > 7.4:
