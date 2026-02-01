@@ -11,7 +11,7 @@ from documenti_ev import genera_pdf_unico_bytes
 # Config & Theme
 # =========================
 st.set_page_config(
-    page_title="Progetto EV – CEI 64-8/722",
+    page_title="Progetto EV – CEI 64-8/7.22",
     page_icon="⚡",
     layout="wide",
 )
@@ -35,7 +35,7 @@ hr { margin: 1.1rem 0; }
     unsafe_allow_html=True,
 )
 
-st.title("⚡ Progettazione Ricarica Veicoli Elettrici (EV) – CEI 64-8 Sez. 722")
+st.title("⚡ Progettazione Ricarica Veicoli Elettrici (EV) – CEI 64-8 Sez. 7.22")
 st.caption("Calcolo, verifica sezione linea, protezioni e relazione tecnica – eV Field Service")
 
 with st.sidebar:
@@ -44,7 +44,7 @@ with st.sidebar:
         """
 - Inserisci i **dati impianto** (alimentazione, potenza, lunghezza).
 - Completa i **parametri di progetto** (cosφ, temperatura, raggruppamento).
-- Inserisci i **dati EV (Sez. 722)** (modo, punto, esterno, IP/IK, SPD).
+- Inserisci i **dati EV (Sez. 7.22)** (modo, punto, esterno, IP/IK, SPD).
 - Premi **Calcola** e scarica il **PDF**.
 
 **Nota “a prova di ingegnere elettrico”**
@@ -162,7 +162,7 @@ with p4:
         help="Se presente, può ridurre la potenza simultanea richiesta e migliorare compatibilità con fornitura.",
     )
 
-st.subheader("4) CEI 64-8/7 Sez. 722 – Dati EV")
+st.subheader("4) CEI 64-8/7 Sez. 7.22 – Dati EV")
 e1, e2, e3, e4 = st.columns(4)
 with e1:
     modo_ricarica = st.selectbox(
@@ -363,7 +363,7 @@ if res:
 
     st.divider()
 
-    t1, t2, t3 = st.tabs(["📄 Relazione", "✅ Checklist 722", "🧪 Verifiche 4-41"])
+    t1, t2, t3 = st.tabs(["📄 Relazione", "✅ Checklist 7.22", "🧪 Verifiche 4-41"])
     with t1:
         st.text_area("Relazione tecnica (anteprima)", res.get("relazione", ""), height=320)
         st.caption("Suggerimento: scarica il PDF per l’impaginazione completa e le sezioni formattate.")
@@ -422,7 +422,7 @@ if res:
     )
 
     st.download_button(
-        label="⬇️ Scarica PDF completo (Relazione + Unifilare + Planimetria + Checklist 722)",
+        label="⬇️ Scarica PDF completo (Relazione Tecnica + Note per Unifilare + Note per Planimetria)",
         data=pdf_bytes,
         file_name="Progetto_EV_CEI64-8_722.pdf",
         mime="application/pdf",
