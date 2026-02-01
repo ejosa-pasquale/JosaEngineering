@@ -96,24 +96,7 @@ def genera_pdf_unico_bytes(
     # =========================
     story.append(_p("RELAZIONE TECNICA – INFRASTRUTTURA DI RICARICA EV", styles["Title"]))
     story.append(Spacer(1, 6))
-    story.append(_p("Conforme: CEI 64-8 (Sez. 722) – Report generato dal software", styles["SmallMuted"]))
     story.append(Spacer(1, 14))
-
-    # =========================
-    # Sezione “Formule & Verifiche” (derivata)
-    # =========================
-    formulae = _extract_formula_lines(relazione)
-    if formulae:
-        story.append(_p("FORMULE E VERIFICHE (estratto)", styles["Heading2"]))
-        story.append(Spacer(1, 6))
-        story.append(_p("Le righe seguenti sono estratte automaticamente dalla relazione per rendere immediati calcoli e condizioni di verifica.", styles["SmallMuted"]))
-        story.append(Spacer(1, 8))
-
-        for s in formulae:
-            story.append(_p(s, styles["Mono"]))
-            story.append(Spacer(1, 2))
-
-        story.append(Spacer(1, 10))
 
     # =========================
     # Relazione completa (testo originale)
@@ -126,9 +109,8 @@ def genera_pdf_unico_bytes(
     # =========================
     # Unifilare (testo/descrizione)
     # =========================
-    story.append(_p("DATI PER SCHEMA UNIFILARE", styles["Title"]))
+    story.append(_p("SCHEMA UNIFILARE", styles["Title"]))
     story.append(Spacer(1, 10))
-    story.append(_p("Nota: questa sezione riporta le informazioni utilizzate per lo schema unifilare.", styles["SmallMuted"]))
     story.append(Spacer(1, 10))
     story.append(_p(unifilare, styles["BodyText"]))
     story.append(PageBreak())
@@ -136,7 +118,7 @@ def genera_pdf_unico_bytes(
     # =========================
     # Planimetria
     # =========================
-    story.append(_p("NOTE PLANIMETRIA", styles["Title"]))
+    story.append(_p("PLANIMETRIA", styles["Title"]))
     story.append(Spacer(1, 10))
     story.append(_p(planimetria, styles["BodyText"]))
     story.append(PageBreak())
@@ -176,6 +158,21 @@ def genera_pdf_unico_bytes(
     add_table("Esiti OK", ok_722, colors.green)
     add_table("Warning", warning_722, colors.orange)
     add_table("Non conformità", nonconf_722, colors.red)
+
+
+    # =========================
+    # Formule & Verifiche (estratto) - in fondo al report
+    # =========================
+    formulae = _extract_formula_lines(relazione)
+    if formulae:
+        story.append(PageBreak())
+        story.append(_p("FORMULE E VERIFICHE", styles["Title"]))
+        story.append(Spacer(1, 10))
+        for s in formulae:
+            story.append(_p(s, styles["Mono"]))
+            story.append(Spacer(1, 3))
+        story.append(Spacer(1, 12))
+        story.append(_p("Conforme: CEI 64-8 (Sez. 722)", styles["SmallMuted"]))
 
     doc.build(story, onFirstPage=_add_page_number, onLaterPages=_add_page_number)
     return buf.getvalue()
