@@ -588,23 +588,36 @@ if isinstance(res, dict) and res:
 
     st.divider()
 
-    pdf_bytes = genera_pdf_unico_bytes(
-        relazione=res["relazione"],
-        unifilare=res["unifilare"],
-        planimetria=res["planimetria"],
-        ok_722=res["ok_722"],
-        warning_722=res["warning_722"],
-        nonconf_722=res["nonconf_722"],
-        # Dati generali intestazione PDF
-        committente=f"{nome} {cognome}".strip(),
-        ubicazione=indirizzo,
-        sistema_distribuzione=sistema,
-        alimentazione_evse=alimentazione,
-        modo_ricarica=modo_ricarica,
-        punto_connessione=tipo_punto,
-        installazione_esterna=esterno,
-        altezza_punto_connessione_m=altezza_presa_m,
-    )
+    # Compatibilità: alcune versioni di documenti_ev.py potrebbero non avere
+    # i parametri aggiuntivi per i "DATI GENERALI" (Streamlit Cloud può cacheare).
+    # Proviamo prima con i campi estesi; se la firma non li supporta, ripieghiamo.
+    try:
+        pdf_bytes = genera_pdf_unico_bytes(
+            relazione=res["relazione"],
+            unifilare=res["unifilare"],
+            planimetria=res["planimetria"],
+            ok_722=res["ok_722"],
+            warning_722=res["warning_722"],
+            nonconf_722=res["nonconf_722"],
+            # Dati generali intestazione PDF
+            committente=f"{nome} {cognome}".strip(),
+            ubicazione=indirizzo,
+            sistema_distribuzione=sistema,
+            alimentazione_evse=alimentazione,
+            modo_ricarica=modo_ricarica,
+            punto_connessione=tipo_punto,
+            installazione_esterna=esterno,
+            altezza_punto_connessione_m=altezza_presa_m,
+        )
+    except TypeError:
+        pdf_bytes = genera_pdf_unico_bytes(
+            relazione=res["relazione"],
+            unifilare=res["unifilare"],
+            planimetria=res["planimetria"],
+            ok_722=res["ok_722"],
+            warning_722=res["warning_722"],
+            nonconf_722=res["nonconf_722"],
+        )
 
     st.download_button(
         label="⬇️ Scarica PDF completo (Relazione + Unifilare + Planimetria + Checklist 722)",
