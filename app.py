@@ -595,6 +595,15 @@ if isinstance(res, dict) and res:
         ok_722=res["ok_722"],
         warning_722=res["warning_722"],
         nonconf_722=res["nonconf_722"],
+        # Dati generali intestazione PDF
+        committente=f"{nome} {cognome}".strip(),
+        ubicazione=indirizzo,
+        sistema_distribuzione=sistema,
+        alimentazione_evse=alimentazione,
+        modo_ricarica=modo_ricarica,
+        punto_connessione=tipo_punto,
+        installazione_esterna=esterno,
+        altezza_punto_connessione_m=altezza_presa_m,
     )
 
     st.download_button(

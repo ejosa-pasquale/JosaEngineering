@@ -17,6 +17,65 @@ def _p(text: str, style):
     return Paragraph(safe, style)
 
 
+def _bool_si_no(v) -> str:
+    """Formato coerente Sì/No per il PDF."""
+    if v is None:
+        return "—"
+    return "Sì" if bool(v) else "No"
+
+
+def _fmt_float(v, nd: int = 2) -> str:
+    if v is None:
+        return "—"
+    try:
+        return f"{float(v):.{nd}f}"
+    except Exception:
+        return str(v)
+
+
+def _build_dati_norme_blocco(
+    *,
+    committente: str | None = None,
+    ubicazione: str | None = None,
+    sistema_distribuzione: str | None = None,
+    alimentazione_evse: str | None = None,
+    modo_ricarica: str | None = None,
+    punto_connessione: str | None = None,
+    installazione_esterna: bool | None = None,
+    altezza_punto_connessione_m: float | None = None,
+) -> str:
+    """Costruisce il blocco 'DATI GENERALI' + riferimenti normativi.
+
+    Nota: i campi sono opzionali per mantenere compatibilità con versioni
+    precedenti (se non passati, viene stampato un trattino).
+    """
+    dati = [
+        "DATI GENERALI",
+        f"Committente: {committente or '—'}",
+        f"Ubicazione: {ubicazione or '—'}",
+        f"Sistema di distribuzione: {sistema_distribuzione or '—'}",
+        f"Alimentazione EVSE: {alimentazione_evse or '—'}",
+        f"Modo di ricarica: {modo_ricarica or '—'}",
+        f"Punto di connessione: {punto_connessione or '—'}",
+        f"Installazione esterna: {_bool_si_no(installazione_esterna)}",
+        f"Altezza punto di connessione: {_fmt_float(altezza_punto_connessione_m, 2)} m",
+        "",
+        "RIFERIMENTI NORMATIVI E LEGISLATIVI",
+        "- Legge 186/68: regola dell’arte.",
+        "- D.M. 37/08: realizzazione impianti all’interno degli edifici (ove applicabile).",
+        "- CEI 64-8:",
+        "  • Parte 4-41: protezione contro i contatti elettrici.",
+        "  • Parte 4-43: protezione contro le sovracorrenti.",
+        "  • Parte 5-52: condutture (scelta e posa).",
+        "  • Parte 5-53: apparecchi di manovra e protezione.",
+        "  • Parte 5-54: impianti di terra ed equipotenzialità.",
+        "  • Parte 7-722: alimentazione dei veicoli elettrici.",
+        "- IEC/CEI EN 61851-1: sistemi di ricarica conduttiva dei veicoli elettrici.",
+        "- CEI EN 62305 / CEI 81-10: valutazione protezione contro sovratensioni (quando applicabile).",
+    ]
+    return "\n".join(dati)
+
+
 def _extract_formula_lines(relazione: str, max_lines: int = 40) -> List[str]:
     """
     Estrae righe 'formula-like' dalla relazione (senza alterare i calcoli).
@@ -62,6 +121,15 @@ def genera_pdf_unico_bytes(
     ok_722: Iterable[str],
     warning_722: Iterable[str],
     nonconf_722: Iterable[str],
+    # Dati per intestazione (opzionali)
+    committente: str | None = None,
+    ubicazione: str | None = None,
+    sistema_distribuzione: str | None = None,
+    alimentazione_evse: str | None = None,
+    modo_ricarica: str | None = None,
+    punto_connessione: str | None = None,
+    installazione_esterna: bool | None = None,
+    altezza_punto_connessione_m: float | None = None,
 ):
     """
     PDF tecnico EV:
@@ -101,29 +169,16 @@ def genera_pdf_unico_bytes(
     story.append(Spacer(1, 10))
 
     # Blocco richiesto: inizio pagina dopo "RELAZIONE COMPLETA" (duplicato, resta anche in fondo)
-    dati_norme_blocco = """DATI GENERALI
-Committente: Mario Rossi
-Ubicazione: Via Garibaldi 1, Mantova
-Sistema di distribuzione: TT
-Alimentazione EVSE: Trifase 400 V
-Modo di ricarica: Modo 3
-Punto di connessione: Connettore EV
-Installazione esterna: No
-Altezza punto di connessione: 1.00 m
-
-RIFERIMENTI NORMATIVI E LEGISLATIVI
-- Legge 186/68: regola dell’arte.
-- D.M. 37/08: realizzazione impianti all’interno degli edifici (ove applicabile).
-- CEI 64-8:
-  • Parte 4-41: protezione contro i contatti elettrici.
-  • Parte 4-43: protezione contro le sovracorrenti.
-  • Parte 5-52: condutture (scelta e posa).
-  • Parte 5-53: apparecchi di manovra e protezione.
-  • Parte 5-54: impianti di terra ed equipotenzialità.
-  • Parte 7-722: alimentazione dei veicoli elettrici.
-- IEC/CEI EN 61851-1: sistemi di ricarica conduttiva dei veicoli elettrici.
-- CEI EN 62305 / CEI 81-10: valutazione protezione contro sovratensioni (quando applicabile).
-"""
+    dati_norme_blocco = _build_dati_norme_blocco(
+        committente=committente,
+        ubicazione=ubicazione,
+        sistema_distribuzione=sistema_distribuzione,
+        alimentazione_evse=alimentazione_evse,
+        modo_ricarica=modo_ricarica,
+        punto_connessione=punto_connessione,
+        installazione_esterna=installazione_esterna,
+        altezza_punto_connessione_m=altezza_punto_connessione_m,
+    )
     story.append(_p(dati_norme_blocco, styles["BodyText"]))
     story.append(Spacer(1, 10))
     story.append(_p(relazione or "—", styles["BodyText"]))
